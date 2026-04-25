@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+sqlalchemy
+pydantic
+pydantic-settings
+profanity-check

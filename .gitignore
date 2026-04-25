@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+
+# App Data (Safe-Zones & Local Logs)
+/data/*.db
+/data/*.log
+
+# Environment
+.env
+.vercel

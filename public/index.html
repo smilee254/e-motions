@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>e-motions | Silent Sanctuary</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="sanctuary-root">
+        <!-- Persistent SOS Bridge -->
+        <nav class="top-nav">
+            <div class="status-indicator">
+                <span id="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+            <button id="sos-btn" onclick="triggerSOS()">SOS</button>
+        </nav>
+
+        <!-- The Responding Diary Feed -->
+        <main id="diary-feed">
+            <div class="system-note">Welcome. Your words stay here.</div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="input-container">
+            <textarea id="entry-input" placeholder="Type your truth..." rows="1"></textarea>
+            <button id="send-btn" onclick="handleSend()">
+                <svg viewBox="0 0 24 24" width="24" height="24">
+                    <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+            </button>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
