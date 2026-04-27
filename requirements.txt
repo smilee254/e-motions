@@ -6,3 +6,5 @@ sqlalchemy
 pydantic
 pydantic-settings
 profanity-check
+google-generativeai
+python-dotenv
