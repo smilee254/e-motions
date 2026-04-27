@@ -19,10 +19,14 @@ class UserProfile(Base):
     trust_score = Column(Integer, default=100)
     last_active = Column(DateTime, default=datetime.datetime.now)
     region = Column(String)
+    sub_county = Column(String, nullable=True)
+    county = Column(String, nullable=True)
 
-    def __init__(self, session_id: str, region: str):
+    def __init__(self, session_id: str, region: str, sub_county: str = None, county: str = None):
         self.session_id = session_id
         self.region = region
+        self.sub_county = sub_county
+        self.county = county
         self.trust_score = 100
         self.last_active = datetime.datetime.now()
 
@@ -42,10 +46,10 @@ def update_trust_score(session_id: str, delta: int):
     finally:
         db.close()
 
-def create_user_profile(session_id: str, region: str):
+def create_user_profile(session_id: str, region: str, sub_county: str = None, county: str = None):
     db = SessionLocal()
     try:
-        user = UserProfile(session_id=session_id, region=region)
+        user = UserProfile(session_id=session_id, region=region, sub_county=sub_county, county=county)
         db.add(user)
         db.commit()
     finally:

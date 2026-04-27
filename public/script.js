@@ -1,6 +1,7 @@
-const region = "Nairobi";
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const socket = new WebSocket(`${protocol}//${window.location.host}/ws/${region}`);
+const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+let safeExitContact = "1199"; // Default Red Cross
 
 const diaryFeed = document.getElementById('diary-feed');
 const input = document.getElementById('entry-input');
@@ -32,7 +33,7 @@ function startInactivityTimer() {
 }
 
 socket.onopen = () => {
-    statusText.textContent = "Safe Zone: " + region;
+    statusText.textContent = "Connecting to Safe Zone...";
     statusIndicator.classList.add('connected');
     startInactivityTimer();
 };
@@ -51,7 +52,21 @@ socket.onmessage = (event) => {
             statusIndicator.style.background = "rgba(168, 85, 247, 0.2)"; // Purple glass for AI
             document.getElementById('status-dot').style.background = "#a855f7";
         }
+        
+        // Update Safe Zone text if location is mentioned
+        if (data.content.includes("recognized you're in")) {
+            const parts = data.content.split("recognized you're in ");
+            if (parts.length > 1) {
+                statusText.textContent = "Safe Zone: " + parts[1].split(".")[0];
+            }
+        }
+        
         log(data.content, "system");
+    } else if (data.type === "metadata") {
+        if (data.key === "safe_exit_contact") {
+            safeExitContact = data.value;
+            console.log("Updated Safe Exit Contact:", safeExitContact);
+        }
     } else {
         renderMessage(data.content, data.type);
         // Ensure Sentinel messages also trigger purple if not already set
@@ -103,7 +118,10 @@ function renderMessage(content, type) {
 }
 
 function triggerSOS() {
-    if (confirm("Connecting you to Kenya Red Cross (1199). Proceed?")) {
-        window.location.href = "tel:1199";
+    const displayContact = safeExitContact.includes(":") ? safeExitContact.split(":")[1].trim() : safeExitContact;
+    if (confirm(`Connecting you to Regional Support (${safeExitContact}). Proceed?`)) {
+        // Extract phone number if it's in format "Name: Number"
+        const phone = safeExitContact.match(/\d+/) ? safeExitContact.match(/\d+/)[0] : "1199";
+        window.location.href = `tel:${phone}`;
     }
 }

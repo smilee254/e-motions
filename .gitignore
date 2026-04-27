@@ -11,3 +11,6 @@ env/
 # Environment
 .env
 .vercel
+
+# Databases
+/api/*.mmdb

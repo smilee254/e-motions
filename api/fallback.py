@@ -14,20 +14,23 @@ except Exception as e:
     logger.error(f"Failed to load sentence-transformer: {e}")
     embedder = None
 
+# Regional Support Contacts (Kenyan Context)
+REGIONAL_CONTACTS = {
+    "Kiambu": "Kiambu Level 5 Hospital Mental Health Unit: 0722 000 000 (Mock)",
+    "Nairobi": "Red Cross Nairobi Regional Branch: 1199",
+    "Chuka": "Chuka University Counseling Center: 0711 000 000 (Mock)",
+    "Mombasa": "Coast General Hospital Psychiatric Wing: 0733 000 000 (Mock)",
+    "Nakuru": "Nakuru Level 5 Hospital: 0722 111 111 (Mock)",
+    "Uasin Gishu": "Moi Teaching and Referral Hospital (MTRH): 053 2033041",
+    "Kisumu": "Jaramogi Oginga Odinga Teaching & Referral Hospital: 057 2020130"
+}
+
 # Extended Kenyan Knowledge Base + Standard Peer Counseling
 KNOWLEDGE_BASE = [
-    # Kenyan Context
-    {"input": "Sapa is hitting hard, I can't even afford fare.", "reply": "Financial pressure can make the world feel very small and suffocating. You aren't alone in this hustle. What's one thing we can focus on that doesn't cost a cent today?"},
-    {"input": "My siblings expect me to pay for everything.", "reply": "That weight of being the 'provider' is heavy, especially when you're still trying to find your own feet. It’s okay to feel overwhelmed by those expectations."},
-    {"input": "These Actuarial units are going to fail me.", "reply": "Calculus and Bivariate Probability can feel like a mountain. Don't let the grades define your worth as a builder. How about we break the mountain into smaller stones?"},
-    {"input": "My friends left me out of their business.", "reply": "Feeling like a 'third wheel' or being excluded by your circle is a deep sting. This sanctuary is a space where you don't have to compete for a seat at the table."},
-    {"input": "My parents don't understand my career path.", "reply": "There is a massive gap sometimes between what they want for us and who we actually are. It takes a lot of courage to keep building your own path despite that."},
-    {"input": "I'm just tired of being alone in this room.", "reply": "The silence in a room can get very loud when you're struggling. I am here, and I am listening. Tell me about the last thing that made you feel even a little bit like yourself."},
-    
-    # Slang / Informal
-    {"input": "Sapa is killing me", "reply": "Financial stress in this economy is a real weight. You're doing your best with what you have. Let's talk through the heavy parts."},
-    {"input": "Black tax is too much", "reply": "The pressure to provide for everyone can make you feel like you're disappearing. It's okay to acknowledge how exhausting that is."},
-    {"input": "I failed my exams at Chuka", "reply": "One paper doesn't define a builder. You've got the skills to create systems; don't let the theory struggles dim that light."},
+    # Kenyan Context & Success Stories
+    {"input": "Sapa is hitting hard, I can't even afford fare.", "reply": "Financial pressure can make the world feel very small. Like Kamau from Kiambu who started with just 50 bob, sometimes the smallest steps are the most resilient ones. What's one thing we can focus on today?"},
+    {"input": "Black tax is too much", "reply": "The weight of being the 'provider' is heavy. Many have found that setting 'soft boundaries' with family is a survival skill, not a betrayal. It's okay to breathe for yourself too."},
+    {"input": "I failed my exams at Chuka", "reply": "Chuka is tough, but remember Sarah who failed her first year but eventually built a tech startup in Meru? This unit doesn't define your capacity to create. Let's look at the next step."},
     
     # Standard Peer Support
     {"input": "I feel like a burden", "reply": "It sounds like you're carrying a lot right now. Sharing isn't a burden; it's the first step to lightening the load."},
@@ -59,6 +62,9 @@ def get_kenyan_fallback(user_text):
         return "I am here and I'm listening. Your thoughts are safe in this sanctuary."
         
     try:
+        if not embedder or not index:
+            return "I hear you. Tell me more about what's on your mind."
+
         query_vector = embedder.encode([user_text])
         # Find the top 1 closest match
         D, I = index.search(query_vector.astype('float32'), 1)
@@ -72,3 +78,14 @@ def get_kenyan_fallback(user_text):
     except Exception as e:
         logger.error(f"Fallback search error: {e}")
         return "The sanctuary is a quiet space for your thoughts. I'm with you."
+
+def get_regional_grounding(region: str) -> str:
+    """Provides local context for the AI."""
+    contact = REGIONAL_CONTACTS.get(region, "the nearest Red Cross branch")
+    return f"Since you're in {region}, I'm keeping an eye on local resources for you. If things feel too heavy, {contact} is available."
+
+def detect_depth(text: str) -> float:
+    """Returns a depth score from 0.0 to 1.0 based on keyword intensity."""
+    heavy_terms = ["black tax", "sapa", "suicide", "die", "give up", "hopeless", "broken", "failed"]
+    score = sum(0.2 for term in heavy_terms if term in text.lower())
+    return min(score, 1.0)

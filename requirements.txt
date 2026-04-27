@@ -5,6 +5,9 @@ httpx
 sqlalchemy
 pydantic
 pydantic-settings
-profanity-check
+alt-profanity-check
 google-generativeai
 python-dotenv
+geoip2
+sentence-transformers
+faiss-cpu
