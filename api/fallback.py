@@ -58,16 +58,15 @@ def get_kenyan_fallback(user_text):
     Finds the closest matching expert response using semantic search.
     If the index or embedder is missing, returns a generic compassionate response.
     """
-    if not embedder or not index:
+    # Use local references for type safety
+    e, i = embedder, index
+    if e is None or i is None:
         return "I am here and I'm listening. Your thoughts are safe in this sanctuary."
         
     try:
-        if not embedder or not index:
-            return "I hear you. Tell me more about what's on your mind."
-
-        query_vector = embedder.encode([user_text])
+        query_vector = e.encode([user_text])
         # Find the top 1 closest match
-        D, I = index.search(query_vector.astype('float32'), 1)
+        D, I = i.search(query_vector.astype('float32'), 1)
         match_idx = I[0][0]
         
         # If no good match found (index safety), return default
