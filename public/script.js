@@ -1,4 +1,64 @@
 /* ═══════════════════════════════════════════════════════
+   SANCTUARY MANUAL MODAL — open / close logic
+   ═══════════════════════════════════════════════════════ */
+
+(function () {
+    const modal      = document.getElementById('manual-modal');
+    const openBtn    = document.getElementById('manual-btn');
+    const closeBtn   = document.getElementById('modal-close');
+    const acceptBtn  = document.getElementById('modal-accept');
+
+    function openModal(scrollToId) {
+        modal.removeAttribute('hidden');
+        document.body.style.overflow = 'hidden';
+        if (scrollToId) {
+            // Give the modal a tick to render before scrolling
+            requestAnimationFrame(() => {
+                const target = document.getElementById(scrollToId);
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        } else {
+            modal.querySelector('.modal-body').scrollTop = 0;
+        }
+    }
+
+    function closeModal() {
+        modal.setAttribute('hidden', '');
+        document.body.style.overflow = '';
+    }
+
+    // "Read the Sanctuary Manual" button
+    if (openBtn)   openBtn.addEventListener('click', () => openModal());
+
+    // ✕ button and backdrop click
+    if (closeBtn)  closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    // Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.hidden) closeModal();
+    });
+
+    // "I understand — take me in" — close modal AND trigger gateway entrance
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', () => {
+            closeModal();
+            const welcomeBtn = document.getElementById('welcome-btn');
+            if (welcomeBtn && !welcomeBtn.disabled) welcomeBtn.click();
+        });
+    }
+
+    // SOS button (inside the chat sanctuary) opens modal to emergency contacts
+    // Uses event delegation so it works even before sanctuary is revealed
+    document.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'sos-btn') {
+            openModal('sos-contacts-anchor');
+        }
+    });
+})();
+
+
+/* ═══════════════════════════════════════════════════════
    GATEWAY — Curtain transition logic
    ═══════════════════════════════════════════════════════ */
 
@@ -131,14 +191,6 @@ function initSanctuary(existingSocket) {
         }
     }
 
-    function triggerSOS() {
-        if (confirm(`Connecting you to Regional Support (${safeExitContact}). Proceed?`)) {
-            const phoneMatch = safeExitContact.match(/\d+/);
-            const phone = phoneMatch ? phoneMatch[0] : "1199";
-            window.location.href = `tel:${phone}`;
-        }
-    }
-
     // ── Socket Events ──────────────────────────────────────
     // The socket is already OPEN (handshake completed before curtain opened),
     // so we update the UI state immediately rather than waiting for onopen.
@@ -191,7 +243,7 @@ function initSanctuary(existingSocket) {
 
     // ── UI Listeners ───────────────────────────────────────
     if (sendBtn) sendBtn.addEventListener('click', handleSend);
-    if (sosBtn) sosBtn.addEventListener('click', triggerSOS);
+    // SOS is handled by modal IIFE event delegation at the top of this file
 
     input.addEventListener('input', function () {
         this.style.height = 'auto';

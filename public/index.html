@@ -96,38 +96,147 @@ float snoise(vec3 v){
                 <strong>e-motions</strong> is built to ensure that you are never alone.
             </p>
 
-            <!-- Rules of the Space -->
-            <ul class="rules-list" aria-label="Rules of the Space">
-                <li>
-                    <span class="rule-icon">◎</span>
-                    <span class="rule-body">
-                        <strong>Anonymity</strong>
-                        <em>You are a soul here, not a profile.</em>
-                    </span>
-                </li>
-                <li>
-                    <span class="rule-icon">◎</span>
-                    <span class="rule-body">
-                        <strong>Security</strong>
-                        <em>Your data stays within the sanctuary.</em>
-                    </span>
-                </li>
-                <li>
-                    <span class="rule-icon">◎</span>
-                    <span class="rule-body">
-                        <strong>Peer Support</strong>
-                        <em>We listen, we don't judge.</em>
-                    </span>
-                </li>
-            </ul>
+            <!-- ─── ESSENTIAL TRIO (always visible) ─────────────────────── -->
+            <div class="safety-trio" role="list" aria-label="Essential safety notices">
+                <div class="trio-pill" role="listitem">
+                    <span class="trio-icon">🧠</span>
+                    <span>Sentinel is an <strong>AI peer</strong>, not a medical professional.</span>
+                </div>
+                <div class="trio-pill trio-pill--crisis" role="listitem">
+                    <span class="trio-icon">🆘</span>
+                    <span>In an <strong>immediate crisis</strong>, tap the SOS button first — do not wait for chat.</span>
+                </div>
+                <div class="trio-pill" role="listitem">
+                    <span class="trio-icon">🔒</span>
+                    <span><strong>No names. No tracking.</strong> Just anonymous peer support.</span>
+                </div>
+            </div>
 
-            <button class="gateway-btn" id="welcome-btn" aria-label="Enter the sanctuary">
-                Welcome to e-motions
-            </button>
+            <!-- ─── CTA ROW ───────────────────────────────────────────────── -->
+            <div class="gateway-cta-row">
+                <button class="gateway-btn" id="welcome-btn" aria-label="Enter the sanctuary">
+                    Welcome to e-motions
+                </button>
+                <button class="manual-btn" id="manual-btn" aria-label="Read the Sanctuary Manual">
+                    Read the Sanctuary Manual
+                </button>
+            </div>
 
             <div class="dev-tag">dev by t-tech</div>
         </div>
     </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!--  SANCTUARY MANUAL MODAL                                         -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="manual-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+        <div class="modal-glass">
+
+            <!-- Header -->
+            <div class="modal-header">
+                <h2 id="modal-title">The Sanctuary Manual</h2>
+                <button class="modal-close" id="modal-close" aria-label="Close manual">✕</button>
+            </div>
+
+            <!-- Scrollable body -->
+            <div class="modal-body">
+
+                <!-- § 1 Clinical boundary -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">🧠</span> Not a Doctor</h3>
+                    <p>e-motions is an <strong>AI-powered peer support sanctuary</strong> and a P2P connection hub. Sentinel is a compassionate thinker backed by expert counselling data — but it is <em>not</em> a licensed psychiatrist, doctor, or emergency medical service. Nothing said in this sanctuary replaces professional clinical care.</p>
+                </div>
+
+                <!-- § 2 SOS protocol -->
+                <div class="manual-section manual-section--crisis" id="sos-contacts-anchor">
+                    <h3><span class="msec-icon">🆘</span> SOS Protocol — Immediate Danger</h3>
+                    <p>If you are in <strong>immediate danger of self-harm, suicide, or are currently experiencing a violent GBV situation</strong>, do not wait for a chat response. Use the <strong>SOS button</strong> in the top-right corner to access verified Kenyan emergency hotlines instantly.</p>
+
+                    <ul class="emergency-contacts" aria-label="Kenyan emergency contacts">
+                        <li>
+                            <span class="ec-badge ec-badge--red">SOS</span>
+                            <span class="ec-detail">
+                                <strong>Kenya Red Cross</strong>
+                                <a href="tel:1199">1199</a>
+                                <em>24 / 7 — Mental health &amp; crisis support</em>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="ec-badge ec-badge--purple">GBV</span>
+                            <span class="ec-detail">
+                                <strong>Gender Violence Recovery Centre</strong>
+                                <a href="tel:1195">1195</a>
+                                <em>24 / 7 — GBV survivors hotline (free)</em>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="ec-badge ec-badge--blue">BEFRI</span>
+                            <span class="ec-detail">
+                                <strong>Befrienders Kenya</strong>
+                                <a href="tel:0800723253">0800 723 253</a>
+                                <em>Suicide prevention — free, confidential</em>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="ec-badge ec-badge--green">KAPC</span>
+                            <span class="ec-detail">
+                                <strong>Kenya Association of Professional Counsellors</strong>
+                                <a href="tel:0722178177">0722 178 177</a>
+                                <em>Professional counsellor referral</em>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="ec-badge ec-badge--orange">EMERG</span>
+                            <span class="ec-detail">
+                                <strong>National Emergency</strong>
+                                <a href="tel:999">999</a> / <a href="tel:112">112</a>
+                                <em>Police / Ambulance / Fire</em>
+                            </span>
+                        </li>
+                        <li>
+                            <span class="ec-badge ec-badge--teal">MTRH</span>
+                            <span class="ec-detail">
+                                <strong>Moi Teaching &amp; Referral Hospital (Rift Valley)</strong>
+                                <a href="tel:0532033041">053 2033041</a>
+                                <em>Psychiatric services — Eldoret</em>
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- § 3 Anonymity oath -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">🔒</span> Anonymity &amp; Privacy Oath</h3>
+                    <p>To keep the sanctuary safe, <strong>do not share your real name, phone number, or home address</strong> in P2P lobbies. While e-motions is architected for privacy, your safety is a shared responsibility. Violations are flagged by our Safety Shield and reduce your trust score.</p>
+                </div>
+
+                <!-- § 4 Conduct -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">🛡️</span> The Ghost Vibe — P2P Conduct Rules</h3>
+                    <p>Hate speech, bullying, sexual harassment, or deliberate triggering of vulnerable peers will result in an <strong>immediate and permanent ban</strong> from the sanctuary. This is a space for healing, not harm. All conduct is scored in real-time by the Safety Shield.</p>
+                </div>
+
+                <!-- § 5 Geolocation -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">📍</span> Geolocation Disclosure</h3>
+                    <p>We use your <strong>IP address</strong> to place you in a regional Safe Zone (e.g., Ruiru, Kiambu). This lookup runs locally on our server using an offline database — no third-party geolocation APIs are called. We do <em>not</em> track your precise GPS coordinates, store your movement history, or share location data with any external party.</p>
+                </div>
+
+                <!-- § 6 AI hallucination -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">⚠️</span> AI Behaviour Disclosure</h3>
+                    <p>Sentinel thinks by processing patterns from millions of expert counselling conversations (CounselChat, MentalChat16K, KAPC guidelines). Despite this, it can occasionally surface <strong>inaccurate, incomplete, or contextually unexpected information</strong>. Always apply your own judgment — and if something feels wrong, use the SOS resources above.</p>
+                </div>
+
+            </div><!-- /modal-body -->
+
+            <div class="modal-footer">
+                <p>e-motions is built in Kenya, for Kenya. <strong>You are never alone.</strong></p>
+                <button class="gateway-btn modal-accept-btn" id="modal-accept">I understand — take me in</button>
+            </div>
+
+        </div>
+    </div>
 
     <!-- ═══════════════════════════════════════════════════ -->
     <!--  CHAT SANCTUARY — hidden until curtain opens        -->
@@ -139,7 +248,7 @@ float snoise(vec3 v){
                 <span id="status-dot"></span>
                 <span id="status-text">Connecting...</span>
             </div>
-            <button id="sos-btn">SOS</button>
+            <button id="sos-btn" aria-label="Open emergency contacts">SOS</button>
         </nav>
 
         <!-- The Responding Diary Feed -->
