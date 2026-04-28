@@ -1,18 +1,14 @@
-# Python
+.env
 __pycache__/
-*.py[cod]
+*.pyc
+.vercel
+node_modules/
 .venv/
 env/
+
+# Large local GeoIP database (100MB+) should not be pushed to standard Git
+/api/*.mmdb
 
 # App Data (Safe-Zones & Local Logs)
 /data/*.db
 /data/*.log
-
-# Environment
-.env
-.vercel
-
-# Databases
-/api/*.mmdb
-/api/*.index
-/api/*.pkl

@@ -38,13 +38,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("e-motions-api")
 
 # --- Sentinel AI Configuration ---
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_KEY:
+# The "Silent Operator" Protocol: Fetching keys
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
+IP_TOKEN = os.getenv("IPINFO_TOKEN")
+
+if GOOGLE_API_KEY:
     # Modern 2026 SDK Initialization
-    ai_client = genai.Client(api_key=GEMINI_KEY)
+    ai_client = genai.Client(api_key=GOOGLE_API_KEY)
     # Target Model: Verified stable 2.5-flash
     AI_MODEL_NAME = "gemini-2.5-flash"
 else:
+    print("⚠️ WARNING: Sentinel is offline. Gemini Key missing.")
     ai_client = None
 
 # --- Local GeoIP Configuration ---
@@ -56,8 +60,8 @@ except Exception as e:
     geoip_reader = None
 
 # --- Sentinel Expert Brain (CounselChat) ---
-EXPERT_INDEX_PATH = os.path.join("api", "sentinel_brain.index")
-EXPERT_PKL_PATH = os.path.join("api", "expert_archive.pkl")
+EXPERT_INDEX_PATH = os.path.join("api", "expert_archive", "sentinel_brain.index")
+EXPERT_PKL_PATH = os.path.join("api", "expert_archive", "expert_archive.pkl")
 expert_index = None
 expert_archive = None
 
@@ -179,9 +183,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="e-motions API", lifespan=lifespan)
 
 # Allow Vercel/Frontend access
+# In production, VERCEL_URL is provided by the platform
+vercel_url = os.getenv("VERCEL_URL")
+allowed_origins = [f"https://{vercel_url}"] if vercel_url else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

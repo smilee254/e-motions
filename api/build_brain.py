@@ -32,10 +32,10 @@ embeddings = model.encode(expert_archive['questionText'].tolist(), show_progress
 index = faiss.IndexFlatL2(embeddings.shape[1])
 index.add(embeddings.astype('float32'))
 
-# Ensure api directory exists
-os.makedirs("api", exist_ok=True)
+# Ensure api/expert_archive directory exists
+os.makedirs("api/expert_archive", exist_ok=True)
 
-faiss.write_index(index, "api/sentinel_brain.index")
-expert_archive.to_pickle("api/expert_archive.pkl")
+faiss.write_index(index, "api/expert_archive/sentinel_brain.index")
+expert_archive.to_pickle("api/expert_archive/expert_archive.pkl")
 
 print("Success! Sentinel is now loaded with expanded expert counseling archives.")

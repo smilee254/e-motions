@@ -597,10 +597,14 @@ body {
 .connected #status-dot { background: #4caf50; }
 
 #sos-btn {
-    background: none;
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 1000;
+    background: rgba(10, 14, 40, 0.4);
     border: 1px solid var(--accent-red);
     color: var(--accent-red);
-    padding: 0.4rem 1rem;
+    padding: 0.4rem 1.2rem;
     border-radius: 20px;
     cursor: pointer;
     font-weight: bold;
