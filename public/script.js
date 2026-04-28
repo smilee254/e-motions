@@ -7,6 +7,28 @@ const diaryFeed = document.getElementById('diary-feed');
 const input = document.getElementById('entry-input');
 const statusText = document.getElementById('status-text');
 const statusIndicator = document.querySelector('.status-indicator');
+const logicMeter = document.getElementById('logic-meter');
+
+let thinkingBubble = null;
+
+function showThinking() {
+    logicMeter.classList.add('active');
+    if (!thinkingBubble) {
+        thinkingBubble = document.createElement('div');
+        thinkingBubble.className = 'thinking-bubble';
+        thinkingBubble.innerHTML = '<span>●</span><span>●</span><span>●</span>';
+        diaryFeed.appendChild(thinkingBubble);
+        diaryFeed.scrollTop = diaryFeed.scrollHeight;
+    }
+}
+
+function hideThinking() {
+    logicMeter.classList.remove('active');
+    if (thinkingBubble) {
+        thinkingBubble.remove();
+        thinkingBubble = null;
+    }
+}
 
 function log(message, type = 'system') {
     const entry = document.createElement('div');
@@ -68,6 +90,7 @@ socket.onmessage = (event) => {
             console.log("Updated Safe Exit Contact:", safeExitContact);
         }
     } else {
+        hideThinking(); // Sentinel replied — stop the meter
         renderMessage(data.content, data.type);
         // Ensure Sentinel messages also trigger purple if not already set
         if (data.content.startsWith("[Sentinel]")) {
@@ -91,7 +114,11 @@ function handleSend() {
         renderMessage(text, 'my');
         input.value = '';
         input.style.height = 'auto';
-        startInactivityTimer(); // Reset timer on every message
+        startInactivityTimer();
+        // Trigger hourglass pulse on every send
+        if (window.triggerPulse) window.triggerPulse();
+        // Show thinking meter only when talking to Sentinel
+        if (currentMode === 'waiting') showThinking();
     }
 }
 

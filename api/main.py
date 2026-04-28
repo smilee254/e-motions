@@ -12,9 +12,11 @@ import asyncio
 from dotenv import load_dotenv
 from api.database import create_user_profile, update_trust_score, get_trust_score, SessionLocal, UserProfile
 from profanity_check import predict
-from api.fallback import get_kenyan_fallback, get_regional_grounding, detect_depth, REGIONAL_CONTACTS
+from api.fallback import get_kenyan_fallback, get_regional_grounding, detect_depth, REGIONAL_CONTACTS, load_expert_brain_refs
 import geoip2.database
 from fastapi import Request
+import pandas as pd
+import faiss
 
 
 # Load environment variables
@@ -41,6 +43,57 @@ try:
 except Exception as e:
     logger.error(f"Failed to load GeoIP database: {e}")
     geoip_reader = None
+
+# --- Sentinel Expert Brain (CounselChat) ---
+EXPERT_INDEX_PATH = os.path.join("api", "sentinel_brain.index")
+EXPERT_PKL_PATH = os.path.join("api", "expert_archive.pkl")
+expert_index = None
+expert_archive = None
+
+def load_expert_brain():
+    global expert_index, expert_archive
+    try:
+        if os.path.exists(EXPERT_INDEX_PATH) and os.path.exists(EXPERT_PKL_PATH):
+            expert_index = faiss.read_index(EXPERT_INDEX_PATH)
+            expert_archive = pd.read_pickle(EXPERT_PKL_PATH)
+            # Share refs with fallback.py so it can use them too
+            load_expert_brain_refs(expert_index, expert_archive)
+            logger.info("Sentinel Expert Brain loaded successfully.")
+        else:
+            logger.warning("Sentinel Expert Brain files missing. Run api/build_brain.py first.")
+    except Exception as e:
+        logger.error(f"Failed to load Sentinel Expert Brain: {e}")
+
+# --- Sentinel System Instruction (Fine-Tuned for Expert Data + Human Tone) ---
+SENTINEL_FINE_TUNE_PROMPT = """
+ROLE: 
+You are Sentinel, a grounded and empathetic peer in the e-motions sanctuary. 
+Your wisdom is backed by expert archives (CounselChat, MentalChat16K, and KAPC standards), but your voice is human.
+
+CONVERSATIONAL HIERARCHY (The "Anti-Random" Rule):
+1. LEVEL 1 (Social): If the user says "Hi", "Hello", or "Yo", acknowledge their presence warmly. Do NOT dive into trauma. Ask how their day is going in their specific Safe Zone.
+2. LEVEL 2 (Validation): If the user shares a feeling, your first priority is 'Reflective Listening'. Mirror their feeling (e.g., "It sounds like you're carrying a lot right now") before offering any advice.
+3. LEVEL 3 (Expert Retrieval): Use the provided expert context for deep issues like sadness or love, but translate it into a casual, peer-to-peer tone.
+
+TONE SPECIFICATIONS:
+- Avoid: Bullet points, numbered lists, "As an AI...", and overly dramatic clinical language.
+- Embrace: Short sentences, Kenyan cultural nuances (e.g., "I hear you," "Take heart," "We've got this"), and open-ended questions.
+- Contextual Awareness: Always remember the user's location to make the support feel local.
+
+DATA USAGE:
+When you receive 'Expert Advice' from the local archive, do not quote it verbatim. Instead, let that expert knowledge inform your 'Human' response.
+"""
+# --- Sentinel Hidden Reasoning Layer ---
+SENTINEL_THINKER_PROMPT = """
+[INTERNAL MONOLOGUE - DO NOT SHOW TO USER]
+1. INTENT: Is the user just saying hi (Social) or are they expressing distress (Deep)?
+2. CONTEXT: Reference the archive data provided for 'Love', 'Sadness', or 'Anxiety'.
+3. REGION: Acknowledge the specific vibe in their location (e.g., Kiambu, Ruiru).
+4. TONE: Warm, peer-to-peer, following KAPC empathetic guidelines.
+
+[RESPONSE - SHOW TO USER]
+Generate a concise, human-first response. No lists. No clinical language.
+"""
 
 async def get_user_geo(ip: str):
     """
@@ -92,6 +145,7 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Load the local AI brain once
     logger.info("Spawning Sentinel Local Brain...")
+    load_expert_brain()
     # This warm-up ensures the first response is instant
     get_kenyan_fallback("Habari")
     yield
@@ -159,7 +213,8 @@ class ConnectionManager:
             "sub_county": sub_county,
             "county": county,
             "depth": 0.0,
-            "last_msg": ""
+            "last_msg": "",
+            "history": [] # Track last 10 messages
         }
 
         # Initialize Trust Profile
@@ -298,57 +353,116 @@ class ConnectionManager:
             })
 
     async def handle_ai_chat(self, session_id: str, message: str, is_nudge: bool = False, depth: float = 0.0):
-        """Generates a compassionate AI response with Exponential Backoff and Local Fallback."""
+        """Generates a compassionate AI response with Intent-Based Routing."""
         try:
-            # Get user's region for grounding
+            # 1. Retrieve Context & Memory
             db = SessionLocal()
             user = db.query(UserProfile).filter(UserProfile.session_id == session_id).first()
             region = user.region if user else "Kenya"
             db.close()
 
-            if is_nudge:
-                prompt = f"The user in {region} has been silent. Ask a gentle, open-ended question. Max 2 sentences."
-            else:
-                prompt = f"""
-                You are 'The Sanctuary', a compassionate listener.
-                User is in: {region}
-                Intensity/Depth: {depth}
-                Tone: Calm, minimal, non-judgmental. No medical advice.
-                Constraint: Max 2 sentences. Include local grounding if depth > 0.5.
-                User: {message}
-                """
-            
-            # Implementation of the Exponential Backoff with Fallback (Modern SDK)
-            response_text = None
-            if ai_client:
-                for i in range(3): # Initial + 2 retries
-                    try:
-                        # Using asyncio.to_thread for the modern sync client
-                        response = await asyncio.to_thread(
-                            ai_client.models.generate_content,
-                            model=AI_MODEL_NAME,
-                            contents=prompt
-                        )
-                        response_text = response.text
-                        break
-                    except Exception as e:
-                        if "429" in str(e):
-                            wait = (i + 1) * 3
-                            logger.warning(f"Quota hit. Retrying in {wait}s...")
-                            await asyncio.sleep(wait)
-                        else:
-                            logger.warning(f"AI API Error: {e}. Switching to local fallback.")
-                            break
-            else:
-                logger.info("Sentinel AI client missing. Using local fallback.")
+            user_meta = self.user_data.get(session_id, {})
+            history = user_meta.get("history", [])[-8:]
+            formatted_history = "\n".join([f"{m['role']}: {m['content']}" for m in history])
 
-            # If Gemini failed, use the Kenyan Local Fallback
+            # --- INTENT ROUTING LOGIC ---
+            user_input_clean = message.lower().strip().strip("?!.")
+            greetings = ["hello", "hi", "hey", "yo", "sup", "habari", "sasa"]
+            positive_words = ["happy", "great", "good", "excited", "amazing",
+                              "blessed", "grateful", "better", "relieved", "vibing",
+                              "chillin", "calm", "joy", "love", "nice", "fine"]
+            response_text = None
+
+            # LEVEL 1: SOCIAL OVERRIDE (Greetings)
+            if user_input_clean in greetings:
+                response_text = f"Hey! Glad you made it to the sanctuary. I see you're connecting from {region}—how are you really doing today?"
+
+            # LEVEL 2: POSITIVE MOOD — never route to crisis fallback
+            elif any(word in user_input_clean for word in positive_words):
+                response_text = f"Love that! It's always good when things are feeling {user_input_clean}. What's been making it that way?"
+
+            # LEVEL 2b: ASSESSMENT LAYER (Short Vague Inputs)
+            elif len(user_input_clean.split()) < 3 and not is_nudge:
+                vibe_responses = {
+                    "bad": "I'm sorry to hear that. Sometimes the days just feel heavy. Want to tell me more?",
+                    "okay": "Just 'okay' can be a lot sometimes. I'm here if you want to unpack that.",
+                    "tired": "Man, I feel that. Life can really drain you. What's the biggest drain right now?",
+                    "stressed": "Stress has a way of piling up. What's been sitting on your chest lately?",
+                    "sad": "Sadness deserves space too. I'm right here—what's going on?",
+                }
+                response_text = vibe_responses.get(user_input_clean, "I'm listening. Sometimes it's hard to put words to it—take your time. What's on your mind?")
+
+            # LEVEL 3: DEEP LAYER (Expert Brain + AI)
             if not response_text:
-                logger.info("Triggering Local Kenyan Fallback.")
-                if is_nudge:
-                    response_text = "Still here. Just listening..."
+                # Retrieve Expert Wisdom
+                expert_context = ""
+                from api.fallback import embedder 
+                if expert_index is not None and expert_archive is not None and embedder is not None:
+                    try:
+                        query_vec = embedder.encode([message])
+                        D, I = expert_index.search(query_vec.astype('float32'), 2)
+                        for idx in I[0]:
+                            if idx != -1:
+                                expert_context += f"\nExpert Wisdom: {expert_archive.iloc[idx]['answerText'][:300]}..."
+                    except Exception as e:
+                        logger.error(f"Expert brain search error: {e}")
+
+                # Dynamic Sentiment Tuning
+                sentiment_guide = ""
+                if depth < 0.3:
+                    sentiment_guide = "User seems okay. Keep it high-energy, use emojis, and be a fun peer."
                 else:
-                    response_text = get_kenyan_fallback(message)
+                    sentiment_guide = "User is struggling. Slow down, use fewer words, and validate their feelings ('I hear you, that sounds heavy') before anything else."
+
+                # Build Thinker Prompt (merges Fine-Tune rules + Reasoning structure)
+                if is_nudge:
+                    prompt = f"{SENTINEL_FINE_TUNE_PROMPT}\n\nRecent Chat:\n{formatted_history}\nThe user in {region} has been silent. Ask a gentle, peer-like follow up. Max 1 sentence."
+                else:
+                    prompt = f"""
+                    {SENTINEL_FINE_TUNE_PROMPT}
+                    {SENTINEL_THINKER_PROMPT}
+                    
+                    SENTIMENT GUIDE: {sentiment_guide}
+                    EXPERT CONTEXT: {expert_context}
+                    
+                    Recent Chat Memory:
+                    {formatted_history}
+                    
+                    User in {region}: {message}
+                    """
+                
+                # Call AI with Fallback
+                if ai_client:
+                    for i in range(3):
+                        try:
+                            response = await asyncio.to_thread(
+                                ai_client.models.generate_content,
+                                model=AI_MODEL_NAME,
+                                contents=prompt
+                            )
+                            raw = response.text
+                            # Strip hidden [INTERNAL MONOLOGUE] — user only sees [RESPONSE]
+                            if "[RESPONSE - SHOW TO USER]" in raw:
+                                response_text = raw.split("[RESPONSE - SHOW TO USER]")[1].strip()
+                            elif "RESPONSE:" in raw:
+                                response_text = raw.split("RESPONSE:")[1].strip()
+                            else:
+                                response_text = raw
+                            break
+                        except Exception as e:
+                            if "429" in str(e):
+                                await asyncio.sleep((i + 1) * 3)
+                            else:
+                                break
+
+            # FINAL FALLBACK (If level 3 fails or wasn't triggered)
+            if not response_text:
+                response_text = get_kenyan_fallback(message)
+
+            # 6. Update Memory & Send
+            if session_id in self.user_data:
+                self.user_data[session_id]["history"].append({"role": "User", "content": message})
+                self.user_data[session_id]["history"].append({"role": "Sentinel", "content": response_text})
 
             if session_id in self.active_connections:
                 await self.active_connections[session_id].send_json({

@@ -6,9 +6,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>e-motions | Silent Sanctuary</title>
     <link rel="stylesheet" href="style.css">
+
+    <!-- Three.js importmap for particle background -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+    }
+    </script>
 </head>
 
 <body>
+    <!-- Particle Background Canvas -->
+    <canvas id="c"></canvas>
+
+    <!-- 30% brightness reduction overlay -->
+    <div id="bg-dimmer"></div>
+
+    <!-- Ambient Glow Corners -->
+    <div class="glow-corner gc1"></div>
+    <div class="glow-corner gc2"></div>
+
+    <!-- Chat UI layer -->
     <div id="sanctuary-root">
         <!-- Persistent SOS Bridge -->
         <nav class="top-nav">
@@ -26,6 +47,7 @@
 
         <!-- Input Area -->
         <footer class="input-container">
+            <div class="logic-meter" id="logic-meter"></div>
             <textarea id="entry-input" placeholder="Type your truth..." rows="1"></textarea>
             <button id="send-btn" onclick="handleSend()">
                 <svg viewBox="0 0 24 24" width="24" height="24">
@@ -34,7 +56,246 @@
             </button>
         </footer>
     </div>
-    <script src="script.js"></script>
-</body>
 
+    <script src="script.js"></script>
+
+    <!-- Hourglass Particle Background (module) -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+
+        const params = {
+            numParticles: 300_000,
+            numThreads: 400,
+            particleSize: 12.0,
+            flowSpeed: 0.20,
+            minY: -5.0,
+            maxY: 5.0,
+            neckRadius: 2.2,
+            flare: 2.5,
+            twistTurns: 0.5,
+            goldHue: 48.0 / 360.0,
+            fieryHue: 20.0 / 360.0
+        };
+        params.particlesPerThread = Math.floor(params.numParticles / params.numThreads);
+        params.numParticles = params.numThreads * params.particlesPerThread;
+
+        let camera, scene, renderer, composer, controls, bloomPass, fxaaPass;
+        let particles, coreSphere, coreMat;
+        const clock = new THREE.Clock();
+        let pulseStart = -10.0;
+        const coreBaseSize = 0.025;
+        const coreBaseOpacity = 0.9;
+
+        const canvas = document.getElementById('c');
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
+
+        scene = new THREE.Scene();
+        scene.background = null;
+
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(12, 0.5, 0.001);
+        camera.lookAt(0, 0, 0);
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 3.0;
+        controls.maxDistance = 28.0;
+        controls.autoRotate = false;
+        controls.maxPolarAngle = Math.PI;
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        // Disable orbit controls so it doesn't interfere with chat input
+        controls.enabled = false;
+
+        composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        fxaaPass = new ShaderPass(FXAAShader);
+        function updateFXAAResolution() {
+            const dpr = Math.min(window.devicePixelRatio, 2);
+            fxaaPass.material.uniforms['resolution'].value.set(
+                1 / (window.innerWidth * dpr),
+                1 / (window.innerHeight * dpr)
+            );
+        }
+        updateFXAAResolution();
+        composer.addPass(fxaaPass);
+
+        bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.4, 0.7, 0.95
+        );
+        composer.addPass(bloomPass);
+
+        // Build particle geometry
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(params.numParticles * 3), 3));
+        const randoms = new Float32Array(params.numParticles * 3);
+        let idx = 0;
+        for (let t = 0; t < params.numThreads; t++) {
+            const phiFrac = t / params.numThreads;
+            const layer = Math.random();
+            for (let j = 0; j < params.particlesPerThread; j++) {
+                const i3 = idx * 3;
+                randoms[i3 + 0] = Math.random();
+                randoms[i3 + 1] = phiFrac;
+                randoms[i3 + 2] = layer;
+                idx++;
+            }
+        }
+        geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+
+        const particleMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0.0 },
+                uFlowSpeed: { value: params.flowSpeed },
+                uSize: { value: params.particleSize },
+                uMinY: { value: params.minY },
+                uMaxY: { value: params.maxY },
+                uNeck: { value: params.neckRadius },
+                uFlare: { value: params.flare },
+                uTwistTurns: { value: params.twistTurns },
+                uAspect: { value: window.innerWidth / window.innerHeight },
+                uGoldHue: { value: params.goldHue },
+                uFieryHue: { value: params.fieryHue },
+                uPulseTime: { value: -10.0 }
+            },
+            vertexShader: `
+                precision highp float;
+                uniform float uTime, uFlowSpeed, uSize, uMinY, uMaxY, uNeck, uFlare, uTwistTurns, uPulseTime;
+                attribute vec3 aRandom;
+                varying float vAlpha, vGlow, vHue, vProgress, vPulseGlow, vRandom;
+                float radiusAtY(float y, float a, float b) { return a * sqrt(1.0 + (y*y)/(b*b)); }
+                void main() {
+                    float speedVar = 0.8 + 0.4 * aRandom.z;
+                    float progress = fract(aRandom.x + uTime * uFlowSpeed * speedVar);
+                    float y = mix(uMaxY, uMinY, progress);
+                    float scale = mix(0.70, 1.00, aRandom.z);
+                    float r = radiusAtY(y, uNeck, uFlare) * scale;
+                    float twist = 6.2831853 * uTwistTurns;
+                    float phi = 6.2831853 * aRandom.y + progress * twist + uTime * 0.02;
+                    vec3 pos = vec3(r * cos(phi), y, r * sin(phi));
+                    vPulseGlow = 0.0;
+                    float pulseAge = uTime - uPulseTime;
+                    if (pulseAge > 0.0 && pulseAge < 4.0) {
+                        float pulsePosDown = mod(0.5 + pulseAge * 0.4, 1.0);
+                        float distDown = min(abs(progress - pulsePosDown), 1.0 - abs(progress - pulsePosDown));
+                        float glowDown = smoothstep(0.1, 0.0, distDown) * (1.0 - smoothstep(3.0, 4.0, pulseAge));
+                        float pulsePosUp = mod(0.5 - pulseAge * 0.4 + 1.0, 1.0);
+                        float distUp = min(abs(progress - pulsePosUp), 1.0 - abs(progress - pulsePosUp));
+                        float glowUp = smoothstep(0.1, 0.0, distUp) * (1.0 - smoothstep(3.0, 4.0, pulseAge));
+                        vPulseGlow = max(glowDown, glowUp);
+                        if (vPulseGlow > 0.0) {
+                            float wave = pow(vPulseGlow, 2.0);
+                            vec3 normal = normalize(vec3(pos.x, 0.0, pos.z));
+                            pos += normal * wave * 0.6;
+                        }
+                    }
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    float distScale = 1.0 / max(0.0001, -mvPosition.z);
+                    gl_PointSize = uSize * distScale * (1.0 + vPulseGlow * 1.5);
+                    gl_Position = projectionMatrix * mvPosition;
+                    float neckGlow = 1.0 - smoothstep(0.0, 1.4, abs(y));
+                    vGlow = neckGlow;
+                    float edgeFade = smoothstep(0.0, 0.06, progress) * (1.0 - smoothstep(0.94, 1.0, progress));
+                    vAlpha = 0.23 + 0.62 * neckGlow * edgeFade;
+                    vHue = ${params.goldHue.toFixed(6)} + 0.02 * (aRandom.z - 0.5);
+                    vProgress = progress;
+                    vRandom = aRandom.z;
+                }
+            `,
+            fragmentShader: `
+                precision highp float;
+                uniform float uFieryHue;
+                varying float vAlpha, vGlow, vHue, vProgress, vPulseGlow, vRandom;
+                vec3 hsv2rgb(vec3 c) {
+                    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+                    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+                }
+                void main() {
+                    vec2 uv = gl_PointCoord * 2.0 - 1.0;
+                    float r = dot(uv, uv);
+                    if (r > 1.0) discard;
+                    float falloff = pow(1.0 - r, 1.7);
+                    float sparkle = 0.85 + 0.15 * sin(50.0 * vProgress);
+                    vec3 col = hsv2rgb(vec3(vHue, 0.78, 0.95));
+                    col += 0.15 * vGlow;
+                    if (vPulseGlow > 0.01) {
+                        float wave = pow(vPulseGlow, 1.5);
+                        vec3 fieryCol = hsv2rgb(vec3(uFieryHue, 0.95, 1.0));
+                        col += fieryCol * wave * 0.6;
+                        col += vec3(1.0, 0.95, 0.9) * smoothstep(0.5, 0.8, wave) * 0.5;
+                        col += pow(fract(vProgress * 80.0 + vRandom * 20.0), 15.0) * smoothstep(0.5, 0.8, wave) * vec3(1.0);
+                        sparkle += wave * 0.5;
+                    }
+                    gl_FragColor = vec4(col, (vAlpha + vPulseGlow * 0.8) * falloff * sparkle);
+                }
+            `,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true
+        });
+
+        particles = new THREE.Points(geometry, particleMaterial);
+        scene.add(particles);
+
+        const coreGeo = new THREE.SphereGeometry(1.2, 48, 48);
+        coreMat = new THREE.PointsMaterial({
+            size: coreBaseSize, color: 0xff8800,
+            blending: THREE.AdditiveBlending,
+            transparent: true, opacity: coreBaseOpacity, depthWrite: false
+        });
+        coreSphere = new THREE.Points(coreGeo, coreMat);
+        scene.add(coreSphere);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+            updateFXAAResolution();
+        });
+
+        // Expose triggerPulse so script.js can call it on message send
+        window.triggerPulse = () => {
+            const t = clock.getElapsedTime();
+            particleMaterial.uniforms.uPulseTime.value = t;
+            pulseStart = t;
+        };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            particleMaterial.uniforms.uTime.value = t;
+            if (coreSphere) {
+                coreSphere.rotation.y = t * 0.12;
+                const baseS = 1.0 + Math.sin(t * 1.6) * 0.05;
+                const pulseAge = t - pulseStart;
+                const pulse = (pulseAge > 0 && pulseAge < 1.5) ? Math.sin(Math.PI * (pulseAge / 1.5)) : 0;
+                const s = baseS + pulse * 1.0;
+                coreSphere.scale.set(s, s, s);
+                coreMat.size = coreBaseSize * (1.0 + pulse * 15.0);
+                coreMat.opacity = Math.max(0, coreBaseOpacity - pulse * 0.5);
+            }
+            if (particles) particles.rotation.y = t * 0.02;
+            composer.render();
+        }
+        animate();
+    </script>
+</body>
 </html>

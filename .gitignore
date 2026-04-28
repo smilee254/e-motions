@@ -14,3 +14,5 @@ env/
 
 # Databases
 /api/*.mmdb
+/api/*.index
+/api/*.pkl

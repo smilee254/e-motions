@@ -11,3 +11,5 @@ python-dotenv
 geoip2
 sentence-transformers
 faiss-cpu
+datasets
+pandas

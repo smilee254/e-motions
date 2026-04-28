@@ -1,27 +1,78 @@
 :root {
-    --bg-color: #121212;
-    --card-bg: #1e1e1e;
+    --bg-1: #050507;
+    --bg-2: #0b0b12;
+    --glass: rgba(255, 255, 255, 0.04);
+    --stroke: rgba(255, 255, 255, 0.08);
+    --accent: #ffd86b;
+    --fiery-glow: #ff8c00;
+    --accent-red: #ff4d4d;
+    --card-bg: rgba(14, 14, 23, 0.65);
     --text-primary: #e0e0e0;
     --text-dim: #888;
-    --accent-red: #ff4d4d;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
 }
 
 body {
-    background-color: var(--bg-color);
+    background:
+        radial-gradient(1200px 1200px at 70% 20%, #0e0e17 0%, var(--bg-2) 35%, var(--bg-1) 75%) fixed,
+        linear-gradient(180deg, var(--bg-2), var(--bg-1)) fixed;
     color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    margin: 0;
-    height: 100vh;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     display: flex;
     justify-content: center;
 }
 
+/* --- Particle Canvas (fixed background) --- */
+#c {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+    display: block;
+    pointer-events: none;
+}
+
+/* 30% brightness reduction — sits above canvas, below UI */
+#bg-dimmer {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.30);
+    z-index: 0;
+    pointer-events: none;
+}
+
+/* --- Ambient Glow Corners --- */
+.glow-corner {
+    position: fixed;
+    width: 40vmax;
+    height: 40vmax;
+    pointer-events: none;
+    filter: blur(60px);
+    opacity: 0.18;
+    mix-blend-mode: screen;
+    background: radial-gradient(closest-side, var(--accent), transparent 60%);
+    z-index: 0;
+}
+.glow-corner.gc1 { left: -20vmax; top: -20vmax; }
+.glow-corner.gc2 { right: -18vmax; bottom: -18vmax; }
+
+/* --- Chat UI (above canvas) --- */
 #sanctuary-root {
+    position: relative;
+    z-index: 1;
     width: 100%;
     max-width: 600px;
     display: flex;
     flex-direction: column;
     padding: 0 1rem;
+    height: 100vh;
 }
 
 .top-nav {
@@ -37,6 +88,11 @@ body {
     gap: 0.5rem;
     font-size: 0.85rem;
     color: var(--text-dim);
+    padding: 0.4rem 0.8rem;
+    background: var(--glass);
+    border: 1px solid var(--stroke);
+    border-radius: 20px;
+    backdrop-filter: blur(8px);
 }
 
 #status-dot {
@@ -44,11 +100,10 @@ body {
     height: 8px;
     background: #555;
     border-radius: 50%;
+    transition: background 0.5s;
 }
 
-.connected #status-dot {
-    background: #4caf50;
-}
+.connected #status-dot { background: #4caf50; }
 
 #sos-btn {
     background: none;
@@ -59,8 +114,8 @@ body {
     cursor: pointer;
     font-weight: bold;
     transition: 0.3s;
+    backdrop-filter: blur(8px);
 }
-
 #sos-btn:hover {
     background: var(--accent-red);
     color: white;
@@ -70,11 +125,13 @@ body {
     flex: 1;
     overflow-y: auto;
     padding-bottom: 2rem;
-    mask-image: linear-gradient(transparent, black 10%);
-    /* Subtle fade at top */
     display: flex;
     flex-direction: column;
+    mask-image: linear-gradient(transparent, black 10%);
+    /* Hide scrollbar */
+    scrollbar-width: none;
 }
+#diary-feed::-webkit-scrollbar { display: none; }
 
 .system-note {
     text-align: center;
@@ -84,70 +141,126 @@ body {
     font-style: italic;
 }
 
-/* Message Styles */
+/* --- Message Bubbles --- */
 .msg {
     margin-bottom: 1.5rem;
     max-width: 85%;
-    line-height: 1.5;
-    padding: 0.8rem 1.2rem;
-    border-radius: 12px;
-    animation: fadeIn 0.8s ease;
+    line-height: 1.6;
+    padding: 0.9rem 1.2rem;
+    border-radius: 14px;
+    animation: fadeIn 0.5s ease;
     word-wrap: break-word;
+    backdrop-filter: blur(10px);
 }
 
 .peer-msg {
     align-self: flex-start;
     color: var(--text-primary);
-    background: var(--card-bg);
+    background: rgba(255, 216, 107, 0.07);
+    border: 1px solid rgba(255, 216, 107, 0.12);
 }
 
 .my-msg {
     align-self: flex-end;
     color: var(--text-dim);
+    background: var(--glass);
+    border: 1px solid var(--stroke);
     text-align: right;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
+/* --- Input Container --- */
 .input-container {
-    padding: 2rem 0;
+    padding: 1.5rem 0 2rem;
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: flex-end;
+    position: relative;
+}
+
+/* Logic Meter: pulses along the bottom of the footer */
+.logic-meter {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    box-shadow: 0 0 10px var(--accent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.logic-meter.active {
+    opacity: 1;
+    animation: logic-pulse 1.8s infinite linear;
+}
+@keyframes logic-pulse {
+    0%   { width: 0%;  left: 0%; }
+    50%  { width: 60%; left: 20%; }
+    100% { width: 0%;  left: 100%; }
 }
 
 #entry-input {
     flex: 1;
-    background: var(--card-bg);
-    border: none;
-    border-radius: 12px;
-    padding: 1rem;
+    background: rgba(14, 14, 23, 0.7);
+    border: 1px solid var(--stroke);
+    border-radius: 14px;
+    padding: 1rem 1.2rem;
     color: white;
     resize: none;
     outline: none;
     font-family: inherit;
     font-size: 1rem;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.3s;
+}
+#entry-input:focus {
+    border-color: rgba(255, 216, 107, 0.35);
 }
 
+/* Send button — glass style matching the energize aesthetic */
 #send-btn {
-    background: none;
-    border: none;
+    background: linear-gradient(45deg, rgba(255,255,255,0.05), rgba(255,255,255,0.1));
+    border: 1px solid var(--stroke);
+    border-radius: 12px;
     color: var(--text-dim);
     cursor: pointer;
-    padding: 0.5rem;
-    transition: 0.3s;
+    padding: 0.75rem;
+    transition: all 0.2s ease-in-out;
+    backdrop-filter: blur(8px);
+    box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.05), 0 8px 24px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-
 #send-btn:hover {
-    color: var(--text-primary);
+    border-color: rgba(255,216,107,0.3);
+    color: var(--accent);
+    box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.08), 0 0 20px -4px var(--fiery-glow), 0 8px 24px rgba(0,0,0,0.3);
+    transform: translateY(-2px);
+}
+#send-btn:active { transform: translateY(0); }
+
+/* Thinking dots */
+.thinking-bubble {
+    align-self: flex-start;
+    color: var(--accent);
+    font-size: 1.4rem;
+    padding: 0.4rem 1rem;
+    animation: fadeIn 0.4s ease;
+    letter-spacing: 6px;
+}
+.thinking-bubble span {
+    display: inline-block;
+    animation: thinking-dots 1.2s infinite;
+}
+.thinking-bubble span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-bubble span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinking-dots {
+    0%, 100% { opacity: 0.2; transform: translateY(0); }
+    50%       { opacity: 1;   transform: translateY(-3px); }
 }
