@@ -1,7 +1,5 @@
 from sentence_transformers import SentenceTransformer
 import faiss
-import numpy as np
-import os
 import logging
 
 # Configure logging
@@ -29,7 +27,7 @@ REGIONAL_CONTACTS = {
 # If the message is positive, never match it to crisis responses
 POSITIVE_SIGNALS = [
     "happy", "great", "good", "excited", "amazing", "blessed",
-    "grateful", "fine", "okay", "okay", "chillin", "vibing",
+    "grateful", "fine", "okay", "chillin", "vibing",
     "better", "relieved", "calm", "peaceful", "joy", "love"
 ]
 

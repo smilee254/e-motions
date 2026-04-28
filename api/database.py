@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine, Column, String, Integer, DateTime
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 import datetime
+from typing import Optional
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./data/emotions_local.db"
 
@@ -22,19 +23,12 @@ class UserProfile(Base):
     sub_county = Column(String, nullable=True)
     county = Column(String, nullable=True)
 
-    def __init__(self, session_id: str, region: str, sub_county: str = None, county: str = None):
-        self.session_id = session_id
-        self.region = region
-        self.sub_county = sub_county
-        self.county = county
-        self.trust_score = 100
-        self.last_active = datetime.datetime.now()
-
 # Initialize database
 Base.metadata.create_all(bind=engine)
 
-def update_trust_score(session_id: str, delta: int):
-    db = SessionLocal()
+def update_trust_score(session_id: str, delta: int) -> None:
+    """Updates the trust score of a user by a given delta."""
+    db: Session = SessionLocal()
     try:
         user = db.query(UserProfile).filter(UserProfile.session_id == session_id).first()
         if user:
@@ -46,21 +40,29 @@ def update_trust_score(session_id: str, delta: int):
     finally:
         db.close()
 
-def create_user_profile(session_id: str, region: str, sub_county: str = None, county: str = None):
-    db = SessionLocal()
+def create_user_profile(session_id: str, region: str, sub_county: Optional[str] = None, county: Optional[str] = None) -> None:
+    """Creates a new user profile in the database."""
+    db: Session = SessionLocal()
     try:
-        user = UserProfile(session_id=session_id, region=region, sub_county=sub_county, county=county)
+        user = UserProfile(
+            session_id=session_id, 
+            region=region, 
+            sub_county=sub_county, 
+            county=county,
+            trust_score=100,
+            last_active=datetime.datetime.now()
+        )
         db.add(user)
         db.commit()
     finally:
         db.close()
 
 def get_trust_score(session_id: str) -> int:
-    db = SessionLocal()
+    """Returns the trust score for a given session ID."""
+    db: Session = SessionLocal()
     try:
         user = db.query(UserProfile).filter(UserProfile.session_id == session_id).first()
-        score = user.trust_score if user else 100
-        return int(score)
+        return int(user.trust_score) if user else 100
     finally:
         db.close()
 

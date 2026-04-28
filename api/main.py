@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import Dict, List, Set, cast, Any
@@ -6,17 +6,28 @@ import uuid
 import datetime
 import re
 import os
-from google import genai
 import logging
 import asyncio
-from dotenv import load_dotenv
-from api.database import create_user_profile, update_trust_score, get_trust_score, SessionLocal, UserProfile
-from profanity_check import predict
-from api.fallback import get_kenyan_fallback, get_regional_grounding, detect_depth, REGIONAL_CONTACTS, load_expert_brain_refs
-import geoip2.database
-from fastapi import Request
+import random
+from contextlib import asynccontextmanager
+
 import pandas as pd
 import faiss
+import geoip2.database
+from google import genai
+from dotenv import load_dotenv
+from profanity_check import predict
+
+from api.database import create_user_profile, update_trust_score, get_trust_score, SessionLocal, UserProfile
+from api.fallback import (
+    get_kenyan_fallback, 
+    get_regional_grounding, 
+    detect_depth, 
+    REGIONAL_CONTACTS, 
+    load_expert_brain_refs,
+    POSITIVE_SIGNALS,
+    embedder
+)
 
 
 # Load environment variables
@@ -83,16 +94,28 @@ TONE SPECIFICATIONS:
 DATA USAGE:
 When you receive 'Expert Advice' from the local archive, do not quote it verbatim. Instead, let that expert knowledge inform your 'Human' response.
 """
-# --- Sentinel Hidden Reasoning Layer ---
+# --- Sentinel Hidden Reasoning Layer (3-Stage Thinker Pipeline) ---
 SENTINEL_THINKER_PROMPT = """
 [INTERNAL MONOLOGUE - DO NOT SHOW TO USER]
-1. INTENT: Is the user just saying hi (Social) or are they expressing distress (Deep)?
-2. CONTEXT: Reference the archive data provided for 'Love', 'Sadness', or 'Anxiety'.
-3. REGION: Acknowledge the specific vibe in their location (e.g., Kiambu, Ruiru).
-4. TONE: Warm, peer-to-peer, following KAPC empathetic guidelines.
+
+STAGE 1 — CULTURAL CONTEXT CHECK (Kenyan Nuance Gate):
+- Is the user invoking Kenyan-specific stressors? (e.g., Black Tax, Sapa, KCSE pressure, Hustler Fund, land disputes, chama obligations, gender-based violence, tribal/ethnic references)
+- If yes: weave that cultural reality into your response — do NOT treat it as a generic Western mental-health scenario.
+- Note the user's county. Is this a high-density urban area (Nairobi, Mombasa, Kisumu) or rural/peri-urban (Kiambu, Murang'a, Kwale)? Adjust tone accordingly — rural users often need more grounded, community-based framing.
+
+STAGE 2 — REFLECTIVE LISTENING (Mirror Before Solving):
+- Before ANY advice or resource, mirror the user's specific pain back to them.
+- Use their exact words where possible (e.g., if they say 'I'm tired of being the strong one', reply 'It sounds like carrying everyone else's weight has left nothing for you').
+- Do NOT jump to solutions. Ask one open-ended question maximum.
+- Avoid: 'Have you tried...', 'You should...', 'I recommend...' — these break the peer-support contract.
+
+STAGE 3 — RESPONSE SYNTHESIS:
+- Integrate Stage 1 (cultural lens) + Stage 2 (reflective mirror) into a single, flowing human response.
+- Max 3 sentences. No bullet points. No clinical language.
+- End with a gentle open question OR a grounding phrase, not a directive.
 
 [RESPONSE - SHOW TO USER]
-Generate a concise, human-first response. No lists. No clinical language.
+Generate the Stage 3 synthesised response only. The user never sees the monologue above.
 """
 
 async def get_user_geo(ip: str):
@@ -139,7 +162,6 @@ def is_safe_local(text: str) -> tuple[bool, str]:
 
     return True, ""
 
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -241,81 +263,86 @@ class ConnectionManager:
         asyncio.create_task(self.match_user(session_id, sub_county, county))
         return session_id
 
+    @staticmethod
+    def _room_key(location: str) -> str:
+        """Normalises any location string to a consistent lobby key."""
+        return re.sub(r'[^a-z0-9]+', '_', location.lower().strip()).strip('_')
+
     async def match_user(self, session_id: str, sub_county: str, county: str):
-        """Tiered matching algorithm: Sub-County -> County -> Sentinel AI"""
+        """Tiered matching algorithm: Sub-County -> County -> National -> Sentinel AI"""
         
-        # Tier 1: Sub-County (30 seconds)
-        if sub_county not in self.lobby:
-            self.lobby[sub_county] = []
-        
-        # Check if anyone is waiting in the sub-county lobby
-        if self.lobby[sub_county]:
-            peer_id = self.lobby[sub_county].pop(0)
-            await self.pair_users(session_id, peer_id, "local peer")
+        # ── Normalise room keys for consistent lobby lookups ──────────────
+        key_sub   = self._room_key(sub_county)   # e.g. "room_kiambu_ruiru"
+        key_county = self._room_key(county)       # e.g. "room_kiambu"
+        key_national = "room_kenya_national"
+
+        # Tier 1: Sub-County room (30 s)
+        self.lobby.setdefault(key_sub, [])
+        if self.lobby[key_sub]:
+            peer_id = self.lobby[key_sub].pop(0)
+            await self.pair_users(session_id, peer_id, f"local peer from {sub_county}")
             return
 
-        # No one found immediately, add to sub-county lobby
-        self.lobby[sub_county].append(session_id)
-        
-        # Wait 30 seconds for local peer
+        self.lobby[key_sub].append(session_id)
+        logger.info(f"[LOBBY] {session_id} waiting in room_{key_sub} (Tier 1)")
         await asyncio.sleep(30)
-        
-        # Check if still in sub-county lobby (i.e., not matched yet)
-        if session_id in self.lobby.get(sub_county, []):
-            self.lobby[sub_county].remove(session_id)
-            
-            # Tier 2: County (Next 30 seconds)
-            await self.send_system_msg(session_id, f"Still looking for a local peer in {sub_county}... expanding to {county} County.")
-            
-            if county not in self.lobby:
-                self.lobby[county] = []
-            
-            if self.lobby[county]:
-                peer_id = self.lobby[county].pop(0)
-                await self.pair_users(session_id, peer_id, "county neighbor")
+
+        if session_id in self.lobby.get(key_sub, []):
+            self.lobby[key_sub].remove(session_id)
+
+            # Tier 2: County room (30 s)
+            await self.send_system_msg(
+                session_id,
+                f"Still looking for a local peer in {sub_county}... expanding to {county} County."
+            )
+            self.lobby.setdefault(key_county, [])
+            if self.lobby[key_county]:
+                peer_id = self.lobby[key_county].pop(0)
+                await self.pair_users(session_id, peer_id, f"county neighbor from {county}")
                 return
-            
-            self.lobby[county].append(session_id)
-            
-            # Wait another 30 seconds
+
+            self.lobby[key_county].append(session_id)
+            logger.info(f"[LOBBY] {session_id} waiting in room_{key_county} (Tier 2)")
             await asyncio.sleep(30)
-            
-            # Tier 3: National (Next 30 seconds)
-            if session_id in self.lobby.get(county, []):
-                self.lobby[county].remove(session_id)
-                
-                await self.send_system_msg(session_id, "Still quiet in your county... opening the sanctuary to all of Kenya.")
-                
-                if "Kenya" not in self.lobby:
-                    self.lobby["Kenya"] = []
-                
-                if self.lobby["Kenya"]:
-                    peer_id = self.lobby["Kenya"].pop(0)
+
+            if session_id in self.lobby.get(key_county, []):
+                self.lobby[key_county].remove(session_id)
+
+                # Tier 3: National room (30 s)
+                await self.send_system_msg(
+                    session_id,
+                    "Still quiet in your county... opening the sanctuary to all of Kenya."
+                )
+                self.lobby.setdefault(key_national, [])
+                if self.lobby[key_national]:
+                    peer_id = self.lobby[key_national].pop(0)
                     await self.pair_users(session_id, peer_id, "national peer")
                     return
-                
-                self.lobby["Kenya"].append(session_id)
-                
-                # Wait final 30 seconds
+
+                self.lobby[key_national].append(session_id)
+                logger.info(f"[LOBBY] {session_id} waiting in room_{key_national} (Tier 3)")
                 await asyncio.sleep(30)
 
-            # Tier 4: Sentinel AI Fallback
-            # Check all possible lobbies to be sure
-            for loc in [sub_county, county, "Kenya"]:
-                if loc in self.lobby and session_id in self.lobby[loc]:
-                    self.lobby[loc].remove(session_id)
-            
-            # If still unmatched (not in self.matches), trigger AI
+            # Tier 4: Sentinel AI — clean up all lobbies first
+            for key in [key_sub, key_county, key_national]:
+                if key in self.lobby and session_id in self.lobby[key]:
+                    self.lobby[key].remove(session_id)
+
             if session_id not in self.matches:
                 self.ai_sessions.add(session_id)
-                await self.send_system_msg(session_id, "The sanctuary is quiet across the country. Sentinel AI is here to listen to you.")
-                # Sentinel grounding
+                await self.send_system_msg(
+                    session_id,
+                    "The National Sanctuary is holding space for you. Sentinel AI is here — take your time."
+                )
                 grounding = get_regional_grounding(county)
                 await self.send_system_msg(session_id, grounding)
+                logger.info(f"[LOBBY] {session_id} routed to Sentinel AI (Tier 4 — National Sanctuary)")
 
     async def pair_users(self, id1: str, id2: str, level: str):
-        if id1 in self.ai_sessions: self.ai_sessions.remove(id1)
-        if id2 in self.ai_sessions: self.ai_sessions.remove(id2)
+        if id1 in self.ai_sessions:
+            self.ai_sessions.remove(id1)
+        if id2 in self.ai_sessions:
+            self.ai_sessions.remove(id2)
 
         self.matches[id1] = id2
         self.matches[id2] = id1
@@ -353,7 +380,13 @@ class ConnectionManager:
             })
 
     async def handle_ai_chat(self, session_id: str, message: str, is_nudge: bool = False, depth: float = 0.0):
-        """Generates a compassionate AI response with Intent-Based Routing."""
+        """
+        Generates a compassionate AI response with:
+        - Intent-Based Routing (Social / Validation / Expert)
+        - 3-Stage Thinker Pipeline (Cultural → Reflective → Synthesised)
+        - Human Processing Delay (1.2–2.5 s jitter) to prevent robotic cadence
+        - Crisis (depth ≥ 0.7) sessions are answered immediately without delay
+        """
         try:
             # 1. Retrieve Context & Memory
             db = SessionLocal()
@@ -368,9 +401,7 @@ class ConnectionManager:
             # --- INTENT ROUTING LOGIC ---
             user_input_clean = message.lower().strip().strip("?!.")
             greetings = ["hello", "hi", "hey", "yo", "sup", "habari", "sasa"]
-            positive_words = ["happy", "great", "good", "excited", "amazing",
-                              "blessed", "grateful", "better", "relieved", "vibing",
-                              "chillin", "calm", "joy", "love", "nice", "fine"]
+            positive_words = POSITIVE_SIGNALS
             response_text = None
 
             # LEVEL 1: SOCIAL OVERRIDE (Greetings)
@@ -396,7 +427,6 @@ class ConnectionManager:
             if not response_text:
                 # Retrieve Expert Wisdom
                 expert_context = ""
-                from api.fallback import embedder 
                 if expert_index is not None and expert_archive is not None and embedder is not None:
                     try:
                         query_vec = embedder.encode([message])
@@ -459,6 +489,13 @@ class ConnectionManager:
             if not response_text:
                 response_text = get_kenyan_fallback(message)
 
+            # ── PULSE LOGIC METER: Human Processing Delay ─────────────────────
+            # Crisis inputs (depth ≥ 0.7) are answered immediately.
+            # Everything else gets a 1.2–2.5 s jitter to simulate genuine
+            # human thinking cadence and prevent a robotic "instant" reply.
+            if depth < 0.7 and not is_nudge:
+                await asyncio.sleep(random.uniform(1.2, 2.5))
+
             # 6. Update Memory & Send
             if session_id in self.user_data:
                 self.user_data[session_id]["history"].append({"role": "User", "content": message})
@@ -502,34 +539,38 @@ class ConnectionManager:
                 await self.handle_ai_chat(sender_id, message, depth=depth)
 
     async def try_priority_match(self, session_id: str):
-        """Attempts to find a human peer for a high-depth user."""
+        """
+        Crisis preemption: when a user's depth ≥ 0.5, promote them to the
+        front of any available regional lobby before falling through to AI.
+        Checks normalised room keys in order: sub-county → county → national.
+        """
         data = self.user_data.get(session_id)
-        if not data: return
-        
-        county = data["county"]
-        # Look in county lobby for anyone
-        if self.lobby.get(county):
-            peer_id = self.lobby[county].pop(0)
-            await self.pair_users(session_id, peer_id, "priority regional peer")
+        if not data:
             return
-        
-        # Also check sub-county (though unlikely if not in county)
+
+        county    = data["county"]
         sub_county = data["sub_county"]
-        if self.lobby.get(sub_county):
-            peer_id = self.lobby[sub_county].pop(0)
-            await self.pair_users(session_id, peer_id, "priority local peer")
-            return
+
+        for loc, label in [
+            (self._room_key(sub_county), "priority local peer"),
+            (self._room_key(county),     "priority regional peer"),
+            ("room_kenya_national",       "priority national peer"),
+        ]:
+            if self.lobby.get(loc):
+                peer_id = self.lobby[loc].pop(0)
+                await self.pair_users(session_id, peer_id, label)
+                logger.info(f"[CRISIS] {session_id} preemptively matched to {peer_id} via {loc}")
+                return
 
 manager = ConnectionManager()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     # Detect IP
-    client_ip = websocket.client.host
-    # If behind a proxy (like Vercel/Cloudflare), we might need X-Forwarded-For
-    forwarded = websocket.headers.get("x-forwarded-for")
-    if forwarded:
-        client_ip = forwarded.split(",")[0]
+    # Detect IP using the same logic as middleware for consistency
+    client_ip = websocket.headers.get("x-forwarded-for") or websocket.client.host
+    if client_ip:
+        client_ip = client_ip.split(",")[0].strip()
         
     geo_info = await get_user_geo(client_ip)
     session_id: str = cast(str, await manager.connect(websocket, geo_info))
@@ -565,11 +606,6 @@ async def websocket_endpoint(websocket: WebSocket):
         peer_id = manager.disconnect(session_id)
         if peer_id:
             await manager.send_system_msg(peer_id, "Your peer has disconnected. Finding a new audience...")
-
-@app.get("/api/location")
-async def get_location(request: Request):
-    # Middleware already populated request.state.geo
-    return getattr(request.state, "geo", {"city": "Unknown", "county": "Unknown", "country": "Kenya"})
 
 # Mount static files at root AFTER routes are defined
 app.mount("/", StaticFiles(directory="public", html=True), name="public")

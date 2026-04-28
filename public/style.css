@@ -1,6 +1,12 @@
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════ */
 :root {
+    /* Core palette */
     --bg-1: #050507;
     --bg-2: #0b0b12;
+    --midnight: #0a192f;       /* curtain background */
+    --amber: #ffbf00;          /* gateway accent */
     --glass: rgba(255, 255, 255, 0.04);
     --stroke: rgba(255, 255, 255, 0.08);
     --accent: #ffd86b;
@@ -18,16 +24,19 @@ html, body {
 }
 
 body {
-    background:
-        radial-gradient(1200px 1200px at 70% 20%, #0e0e17 0%, var(--bg-2) 35%, var(--bg-1) 75%) fixed,
-        linear-gradient(180deg, var(--bg-2), var(--bg-1)) fixed;
+    background-image: radial-gradient(circle farthest-corner, #060A33, #000000);
+    background-repeat: no-repeat;
+    background-size: cover;
     color: var(--text-primary);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     display: flex;
     justify-content: center;
 }
 
-/* --- Particle Canvas (fixed background) --- */
+
+/* ═══════════════════════════════════════════════════════
+   PARTICLE CANVAS (fixed background, always live)
+   ═══════════════════════════════════════════════════════ */
 #c {
     position: fixed;
     top: 0;
@@ -39,7 +48,6 @@ body {
     pointer-events: none;
 }
 
-/* 30% brightness reduction — sits above canvas, below UI */
 #bg-dimmer {
     position: fixed;
     inset: 0;
@@ -48,22 +56,221 @@ body {
     pointer-events: none;
 }
 
-/* --- Ambient Glow Corners --- */
+/* Ambient glow corners — subtle blue to complement the molecule sphere */
 .glow-corner {
     position: fixed;
     width: 40vmax;
     height: 40vmax;
     pointer-events: none;
-    filter: blur(60px);
-    opacity: 0.18;
+    filter: blur(80px);
+    opacity: 0.12;
     mix-blend-mode: screen;
-    background: radial-gradient(closest-side, var(--accent), transparent 60%);
+    background: radial-gradient(closest-side, #101A88, transparent 70%);
     z-index: 0;
 }
 .glow-corner.gc1 { left: -20vmax; top: -20vmax; }
 .glow-corner.gc2 { right: -18vmax; bottom: -18vmax; }
 
-/* --- Chat UI (above canvas) --- */
+
+/* ═══════════════════════════════════════════════════════
+   GATEWAY — CURTAIN LANDING PAGE
+   ═══════════════════════════════════════════════════════ */
+.showcase {
+    position: fixed;
+    inset: 0;
+    z-index: 20;          /* sits above everything */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+}
+
+/* The two curtain panels */
+.curtain {
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    background: var(--midnight);
+    transition: transform 1.5s cubic-bezier(0.7, 0, 0.3, 1);
+    will-change: transform;
+}
+#curtain-l {
+    left: 0;
+    border-right: 1px solid rgba(255, 191, 0, 0.1);
+}
+#curtain-r {
+    right: 0;
+    border-left: 1px solid rgba(255, 191, 0, 0.1);
+}
+
+/* Curtain open state — slides out */
+.showcase.open #curtain-l { transform: translateX(-100%); }
+.showcase.open #curtain-r { transform: translateX(100%); }
+
+/* After fully open, remove pointer capture so chat is clickable */
+.showcase.open {
+    pointer-events: none;
+}
+
+/* Gateway content fades out as curtains open */
+.gateway-content {
+    position: relative;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 2rem;
+    padding: 2rem 1.5rem;
+    max-width: 680px;
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+.showcase.open .gateway-content {
+    opacity: 0;
+    transform: scale(0.97);
+    pointer-events: none;
+}
+
+/* Wordmark / h1 */
+.gateway-wordmark {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(3rem, 8vw, 5.5rem);
+    font-weight: 300;
+    font-style: italic;
+    color: var(--amber);
+    text-shadow:
+        0 0 20px rgba(255, 191, 0, 0.45),
+        0 0 60px rgba(255, 191, 0, 0.15);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    animation: glow-pulse 4s ease-in-out infinite;
+}
+@keyframes glow-pulse {
+    0%, 100% { text-shadow: 0 0 20px rgba(255,191,0,0.45), 0 0 60px rgba(255,191,0,0.15); }
+    50%       { text-shadow: 0 0 30px rgba(255,191,0,0.65), 0 0 80px rgba(255,191,0,0.25); }
+}
+
+/* Tagline */
+.gateway-tagline {
+    font-size: clamp(0.9rem, 2vw, 1.05rem);
+    font-weight: 300;
+    line-height: 1.8;
+    color: rgba(224, 224, 224, 0.75);
+    letter-spacing: 0.5px;
+    max-width: 580px;
+    margin: 0;
+}
+.gateway-tagline strong {
+    color: var(--amber);
+    font-weight: 500;
+}
+
+/* Rules list */
+.rules-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 460px;
+}
+.rules-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: rgba(255, 191, 0, 0.04);
+    border: 1px solid rgba(255, 191, 0, 0.1);
+    border-radius: 10px;
+    text-align: left;
+    backdrop-filter: blur(10px);
+    transition: background 0.3s, border-color 0.3s, transform 0.3s;
+    animation: rule-enter 0.6s ease both;
+}
+.rules-list li:nth-child(1) { animation-delay: 0.15s; }
+.rules-list li:nth-child(2) { animation-delay: 0.30s; }
+.rules-list li:nth-child(3) { animation-delay: 0.45s; }
+
+@keyframes rule-enter {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.rules-list li:hover {
+    background: rgba(255, 191, 0, 0.08);
+    border-color: rgba(255, 191, 0, 0.22);
+    transform: translateX(4px);
+}
+
+.rule-icon {
+    font-size: 1.1rem;
+    color: var(--amber);
+    opacity: 0.7;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+.rule-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.rule-body strong {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--amber);
+}
+.rule-body em {
+    font-style: normal;
+    font-size: 0.875rem;
+    font-weight: 300;
+    color: rgba(224, 224, 224, 0.6);
+    letter-spacing: 0.02em;
+}
+
+/* Welcome button */
+.gateway-btn {
+    display: inline-block;
+    background: transparent;
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    padding: 0.85rem 2.4rem;
+    border-radius: 40px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.3s, color 0.3s, box-shadow 0.3s, transform 0.2s;
+}
+.gateway-btn:hover {
+    background: var(--amber);
+    color: var(--midnight);
+    box-shadow: 0 0 40px rgba(255, 191, 0, 0.4), 0 0 80px rgba(255, 191, 0, 0.1);
+    transform: translateY(-2px);
+}
+.gateway-btn:active {
+    transform: translateY(0);
+}
+
+/* Dev tag */
+.dev-tag {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(255,255,255, 0.25);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   CHAT SANCTUARY ROOT
+   ═══════════════════════════════════════════════════════ */
 #sanctuary-root {
     position: relative;
     z-index: 1;
@@ -73,6 +280,15 @@ body {
     flex-direction: column;
     padding: 0 1rem;
     height: 100vh;
+
+    /* Hidden until gateway is entered */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease 1.2s; /* delay matches curtain timing */
+}
+#sanctuary-root.visible {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .top-nav {
@@ -128,7 +344,6 @@ body {
     display: flex;
     flex-direction: column;
     mask-image: linear-gradient(transparent, black 10%);
-    /* Hide scrollbar */
     scrollbar-width: none;
 }
 #diary-feed::-webkit-scrollbar { display: none; }
@@ -141,7 +356,7 @@ body {
     font-style: italic;
 }
 
-/* --- Message Bubbles --- */
+/* Message Bubbles */
 .msg {
     margin-bottom: 1.5rem;
     max-width: 85%;
@@ -173,7 +388,7 @@ body {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Input Container --- */
+/* Input Container */
 .input-container {
     padding: 1.5rem 0 2rem;
     display: flex;
@@ -182,7 +397,7 @@ body {
     position: relative;
 }
 
-/* Logic Meter: pulses along the bottom of the footer */
+/* Logic Meter */
 .logic-meter {
     position: absolute;
     bottom: 0;
@@ -222,7 +437,6 @@ body {
     border-color: rgba(255, 216, 107, 0.35);
 }
 
-/* Send button — glass style matching the energize aesthetic */
 #send-btn {
     background: linear-gradient(45deg, rgba(255,255,255,0.05), rgba(255,255,255,0.1));
     border: 1px solid var(--stroke);
