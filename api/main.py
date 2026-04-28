@@ -617,3 +617,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # Mount static files at root AFTER routes are defined
 app.mount("/", StaticFiles(directory="public", html=True), name="public")
+
+# Vercel needs this "handler" alias or the 'app' object
+handler = app

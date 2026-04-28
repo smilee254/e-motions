@@ -1,13 +1,12 @@
 {
-  "framework": "fastapi",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index.py" },
-    { "source": "/(.*)", "destination": "/public/$1" }
-  ],
   "functions": {
-    "api/index.py": {
+    "api/main.py": {
       "maxDuration": 30,
       "memory": 1024
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/main.py" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
 }
