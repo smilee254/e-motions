@@ -18,8 +18,8 @@ from google import genai
 from dotenv import load_dotenv
 from profanity_check import predict
 
-from api.database import create_user_profile, update_trust_score, get_trust_score, SessionLocal, UserProfile
-from api.fallback import (
+from api._database import create_user_profile, update_trust_score, get_trust_score, SessionLocal, UserProfile
+from api._fallback import (
     get_kenyan_fallback, 
     get_regional_grounding, 
     detect_depth, 
