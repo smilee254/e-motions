@@ -18,7 +18,16 @@ from google import genai
 from dotenv import load_dotenv
 from profanity_check import predict
 
-from api._database import create_user_profile, update_trust_score, get_trust_score, SessionLocal, UserProfile
+from api._database import (
+    create_user_profile, 
+    update_trust_score, 
+    get_trust_score, 
+    SessionLocal, 
+    UserProfile,
+    log_feedback,
+    update_preferences,
+    get_preferences
+)
 from api._fallback import (
     get_kenyan_fallback, 
     get_regional_grounding, 
@@ -379,11 +388,31 @@ class ConnectionManager:
             db = SessionLocal()
             user = db.query(UserProfile).filter(UserProfile.session_id == session_id).first()
             region = user.region if user else "Kenya"
+            long_term_prefs = user.preferences if user else "{}"
             db.close()
 
             user_meta = self.user_data.get(session_id, {})
             history = user_meta.get("history", [])[-8:]
             formatted_history = "\n".join([f"{m['role']}: {m['content']}" for m in history])
+
+            # --- PREFERENCE LEARNING (Long-term Memory) ---
+            # If user explicitly states a preference (e.g. "I prefer short answers")
+            if "prefer" in message.lower() or "like" in message.lower():
+                # Use AI to update preferences silently
+                pref_extract_prompt = f"Extract user communication preferences from this message: '{message}'. Previous preferences: {long_term_prefs}. Return ONLY a concise JSON string of all preferences."
+                if ai_client:
+                    try:
+                        pref_resp = await asyncio.to_thread(
+                            ai_client.models.generate_content,
+                            model="gemini-1.5-flash",
+                            contents=pref_extract_prompt
+                        )
+                        new_prefs = pref_resp.text.strip().strip("`").replace("json", "").strip()
+                        if "{" in new_prefs:
+                            update_preferences(session_id, new_prefs)
+                            long_term_prefs = new_prefs
+                    except:
+                        pass
 
             # --- INTENT ROUTING LOGIC ---
             user_input_clean = message.lower().strip().strip("?!.")
@@ -411,33 +440,27 @@ class ConnectionManager:
 
             # LEVEL 3: DEEP LAYER (Expert Brain + AI)
             if not response_text:
-                # Retrieve Expert Wisdom
+                # Retrieve Expert Wisdom (Top 3)
                 expert_context = ""
                 if expert_index is not None and expert_archive is not None and embedder is not None:
                     try:
                         query_vec = embedder.encode([message])
-                        D, I = expert_index.search(query_vec.astype('float32'), 2)
+                        D, I = expert_index.search(query_vec.astype('float32'), 3)
                         for idx in I[0]:
                             if idx != -1:
-                                expert_context += f"\nExpert Wisdom: {expert_archive.iloc[idx]['answerText'][:300]}..."
+                                expert_context += f"\nExpert Wisdom: {expert_archive.iloc[idx]['answerText'][:400]}..."
                     except Exception as e:
                         logger.error(f"Expert brain search error: {e}")
 
-                # Dynamic Sentiment Tuning
-                sentiment_guide = ""
-                if depth < 0.3:
-                    sentiment_guide = "User seems okay. Keep it high-energy, use emojis, and be a fun peer."
-                else:
-                    sentiment_guide = "User is struggling. Slow down, use fewer words, and validate their feelings ('I hear you, that sounds heavy') before anything else."
-
                 # Build Thinker Prompt (merges Fine-Tune rules + Reasoning structure)
                 if is_nudge:
-                    prompt = f"{SENTINEL_FINE_TUNE_PROMPT}\n\nRecent Chat:\n{formatted_history}\nThe user in {region} has been silent. Ask a gentle, peer-like follow up. Max 1 sentence."
+                    prompt = f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\nRecent Chat:\n{formatted_history}\nThe user in {region} has been silent. Ask a gentle, peer-like follow up. Max 1 sentence."
                 else:
                     prompt = f"""
                     {SENTINEL_FINE_TUNE_PROMPT}
                     {SENTINEL_THINKER_PROMPT}
                     
+                    USER PREFERENCES (ADHERE TO THESE): {long_term_prefs}
                     SENTIMENT GUIDE: {sentiment_guide}
                     EXPERT CONTEXT: {expert_context}
                     
@@ -476,9 +499,6 @@ class ConnectionManager:
                 response_text = get_kenyan_fallback(message)
 
             # ── PULSE LOGIC METER: Human Processing Delay ─────────────────────
-            # Crisis inputs (depth ≥ 0.7) are answered immediately.
-            # Everything else gets a 1.2–2.5 s jitter to simulate genuine
-            # human thinking cadence and prevent a robotic "instant" reply.
             if depth < 0.7 and not is_nudge:
                 await asyncio.sleep(random.uniform(1.2, 2.5))
 
@@ -486,6 +506,8 @@ class ConnectionManager:
             if session_id in self.user_data:
                 self.user_data[session_id]["history"].append({"role": "User", "content": message})
                 self.user_data[session_id]["history"].append({"role": "Sentinel", "content": response_text})
+                # Store last interaction for feedback
+                self.user_data[session_id]["last_interaction"] = {"query": message, "response": response_text}
 
             if session_id in self.active_connections:
                 await self.active_connections[session_id].send_json({
@@ -543,6 +565,27 @@ async def websocket_endpoint(websocket: WebSocket):
             # Receive text from user
             data = await websocket.receive_text()
             
+            # Handle JSON commands (Feedback)
+            if data.startswith("{"):
+                try:
+                    import json
+                    cmd = json.loads(data)
+                    if cmd.get("type") == "feedback":
+                        score = cmd.get("score", 0)
+                        correction = cmd.get("correction")
+                        interaction = manager.user_data.get(session_id, {}).get("last_interaction")
+                        if interaction:
+                            log_feedback(
+                                session_id,
+                                interaction["query"],
+                                interaction["response"],
+                                score,
+                                correction
+                            )
+                        continue
+                except:
+                    pass
+
             # --- THE SAFETY SHIELD ---
             safe, reason = is_safe_local(data)
             

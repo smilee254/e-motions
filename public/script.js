@@ -183,10 +183,52 @@ function initSanctuary(existingSocket) {
         }, 30000);
     }
 
+    function sendFeedback(score, correction = null) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: "feedback",
+                score: score,
+                correction: correction
+            }));
+            log("Feedback received. Improving the sanctuary...", "system");
+        }
+    }
+
     function renderMessage(content, type) {
         const div = document.createElement('div');
         div.className = `msg ${type}-msg`;
-        div.textContent = content;
+        
+        const textSpan = document.createElement('span');
+        textSpan.textContent = content;
+        div.appendChild(textSpan);
+
+        // Add feedback buttons for Sentinel messages
+        if (content.startsWith("[Sentinel]")) {
+            const actions = document.createElement('div');
+            actions.className = 'msg-actions';
+            
+            const upBtn = document.createElement('button');
+            upBtn.innerHTML = '👍';
+            upBtn.title = 'Helpful';
+            upBtn.onclick = () => {
+                sendFeedback(1);
+                actions.style.display = 'none';
+            };
+
+            const downBtn = document.createElement('button');
+            downBtn.innerHTML = '👎';
+            downBtn.title = 'Not helpful';
+            downBtn.onclick = () => {
+                const correction = prompt("How can I improve? (Optional)");
+                sendFeedback(-1, correction);
+                actions.style.display = 'none';
+            };
+
+            actions.appendChild(upBtn);
+            actions.appendChild(downBtn);
+            div.appendChild(actions);
+        }
+
         diaryFeed.appendChild(div);
         diaryFeed.scrollTop = diaryFeed.scrollHeight;
     }

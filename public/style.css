@@ -53,9 +53,39 @@ body {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.30);
-    z-index: 0;
+    bottom: 2rem;
     pointer-events: none;
 }
+
+.msg-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.msg-actions:hover {
+    opacity: 1;
+}
+
+.msg-actions button {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-dim);
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.msg-actions button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
 
 /* Ambient glow corners — subtle blue to complement the molecule sphere */
 .glow-corner {
