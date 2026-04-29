@@ -1,4 +1,10 @@
 {
+  "builds": [
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/public/$1" }
   ]
