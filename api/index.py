@@ -229,8 +229,6 @@ class ConnectionManager:
     def __init__(self):
         # active_connections: {session_id: WebSocket}
         self.active_connections: Dict[str, WebSocket] = {}
-        # lobby: {region: [session_id1, session_id2]}
-        self.lobby: Dict[str, List[str]] = {}
         # user_data: {session_id: {"sub_county": "...", "county": "...", "depth": 0.0, "last_msg": ""}}
         self.user_data: Dict[str, Dict[str, Any]] = {}
         # matches: {session_id: peer_session_id}
@@ -274,86 +272,50 @@ class ConnectionManager:
             "value": contact
         })
 
-        # Start the matching process in the background
-        # Also enable AI immediately so they aren't left in silence while waiting
-        self.ai_sessions.add(session_id)
-        asyncio.create_task(self.match_user(session_id, sub_county, county))
-        return session_id
-
-    @staticmethod
-    def _room_key(location: str) -> str:
-        """Normalises any location string to a consistent lobby key."""
-        return re.sub(r'[^a-z0-9]+', '_', location.lower().strip()).strip('_')
-
-    async def match_user(self, session_id: str, sub_county: str, county: str):
-        """Tiered matching algorithm: Sub-County -> County -> National -> Sentinel AI"""
-        
-        # ── Normalise room keys for consistent lobby lookups ──────────────
-        key_sub   = self._room_key(sub_county)   # e.g. "room_kiambu_ruiru"
-        key_county = self._room_key(county)       # e.g. "room_kiambu"
-        key_national = "room_kenya_national"
-
-        # Tier 1: Sub-County room (30 s)
-        self.lobby.setdefault(key_sub, [])
-        if self.lobby[key_sub]:
-            peer_id = self.lobby[key_sub].pop(0)
-            await self.pair_users(session_id, peer_id, f"local peer from {sub_county}")
-            return
-
-        self.lobby[key_sub].append(session_id)
-        logger.info(f"[LOBBY] {session_id} waiting in room_{key_sub} (Tier 1)")
-        await asyncio.sleep(30)
-
-        if session_id in self.lobby.get(key_sub, []):
-            self.lobby[key_sub].remove(session_id)
-
-            # Tier 2: County room (30 s)
+        # Start the seamless matching process
+        found = await self.find_peer(session_id)
+        if not found:
+            self.ai_sessions.add(session_id)
             await self.send_system_msg(
                 session_id,
-                f"Still looking for a local peer in {sub_county}... expanding to {county} County."
+                "The National Sanctuary is holding space for you. Sentinel AI is here — take your time."
             )
-            self.lobby.setdefault(key_county, [])
-            if self.lobby[key_county]:
-                peer_id = self.lobby[key_county].pop(0)
-                await self.pair_users(session_id, peer_id, f"county neighbor from {county}")
-                return
+            grounding = get_regional_grounding(county)
+            await self.send_system_msg(session_id, grounding)
+            
+        return session_id
 
-            self.lobby[key_county].append(session_id)
-            logger.info(f"[LOBBY] {session_id} waiting in room_{key_county} (Tier 2)")
-            await asyncio.sleep(30)
+    async def find_peer(self, session_id: str) -> bool:
+        """Instantly finds the best available human peer, hijacking AI sessions if needed."""
+        # 1. Gather all available peers (active, not me, and not currently paired)
+        available_peers = [
+            pid for pid in self.active_connections.keys()
+            if pid != session_id and pid not in self.matches
+        ]
+        
+        if not available_peers:
+            return False
 
-            if session_id in self.lobby.get(key_county, []):
-                self.lobby[key_county].remove(session_id)
-
-                # Tier 3: National room (30 s)
-                await self.send_system_msg(
-                    session_id,
-                    "Still quiet in your county... opening the sanctuary to all of Kenya."
-                )
-                self.lobby.setdefault(key_national, [])
-                if self.lobby[key_national]:
-                    peer_id = self.lobby[key_national].pop(0)
-                    await self.pair_users(session_id, peer_id, "national peer")
-                    return
-
-                self.lobby[key_national].append(session_id)
-                logger.info(f"[LOBBY] {session_id} waiting in room_{key_national} (Tier 3)")
-                await asyncio.sleep(30)
-
-            # Tier 4: Sentinel AI — clean up all lobbies first
-            for key in [key_sub, key_county, key_national]:
-                if key in self.lobby and session_id in self.lobby[key]:
-                    self.lobby[key].remove(session_id)
-
-            if session_id not in self.matches:
-                self.ai_sessions.add(session_id)
-                await self.send_system_msg(
-                    session_id,
-                    "The National Sanctuary is holding space for you. Sentinel AI is here — take your time."
-                )
-                grounding = get_regional_grounding(county)
-                await self.send_system_msg(session_id, grounding)
-                logger.info(f"[LOBBY] {session_id} routed to Sentinel AI (Tier 4 — National Sanctuary)")
+        me = self.user_data[session_id]
+        
+        # 2. Priority 1: Sub-County match
+        for pid in available_peers:
+            peer = self.user_data[pid]
+            if peer["sub_county"] == me["sub_county"]:
+                await self.pair_users(session_id, pid, f"local peer from {me['sub_county']}")
+                return True
+                
+        # 3. Priority 2: County match
+        for pid in available_peers:
+            peer = self.user_data[pid]
+            if peer["county"] == me["county"]:
+                await self.pair_users(session_id, pid, f"county neighbor from {me['county']}")
+                return True
+                
+        # 4. Priority 3: National match (first available)
+        pid = available_peers[0]
+        await self.pair_users(session_id, pid, "national peer")
+        return True
 
     async def pair_users(self, id1: str, id2: str, level: str):
         if id1 in self.ai_sessions:
@@ -378,11 +340,6 @@ class ConnectionManager:
         # Cleanup AI sessions
         self.ai_sessions.discard(session_id)
             
-        # Cleanup lobby
-        for loc in self.lobby:
-            if session_id in self.lobby[loc]:
-                self.lobby[loc] = [s for s in self.lobby[loc] if s != session_id]
-        
         self.user_data.pop(session_id, None)
         self.active_connections.pop(session_id, None)
             
@@ -623,6 +580,11 @@ async def websocket_endpoint(websocket: WebSocket):
         peer_id = manager.disconnect(session_id)
         if peer_id:
             await manager.send_system_msg(peer_id, "Your peer has disconnected. Finding a new audience...")
+            # Try to instantly match the orphaned peer with someone else
+            found = await manager.find_peer(peer_id)
+            if not found:
+                manager.ai_sessions.add(peer_id)
+                await manager.send_system_msg(peer_id, "No human peers are available right now. Sentinel AI has gently stepped in to listen.")
 
 # Mount static files at root AFTER routes are defined
 app.mount("/", StaticFiles(directory="public", html=True), name="public")
