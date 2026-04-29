@@ -45,8 +45,8 @@ IP_TOKEN = os.getenv("IPINFO_TOKEN")
 if GOOGLE_API_KEY:
     # Modern 2026 SDK Initialization
     ai_client = genai.Client(api_key=GOOGLE_API_KEY)
-    # Target Model: Verified stable 2.5-flash
-    AI_MODEL_NAME = "gemini-2.5-flash"
+    # Target Model: Verified stable 1.5-flash
+    AI_MODEL_NAME = "gemini-1.5-flash"
 else:
     print("⚠️ WARNING: Sentinel is offline. Gemini Key missing.")
     ai_client = None
@@ -399,7 +399,6 @@ class ConnectionManager:
             elif any(word in user_input_clean for word in positive_words):
                 response_text = f"Love that! It's always good when things are feeling {user_input_clean}. What's been making it that way?"
 
-            # LEVEL 2b: ASSESSMENT LAYER (Short Vague Inputs)
             elif len(user_input_clean.split()) < 3 and not is_nudge:
                 vibe_responses = {
                     "bad": "I'm sorry to hear that. Sometimes the days just feel heavy. Want to tell me more?",

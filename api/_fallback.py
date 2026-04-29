@@ -21,25 +21,24 @@ class GeminiEmbedder:
 
     def encode(self, texts):
         if not self.client:
-            return np.zeros((len(texts), 768)) # Dummy fallback size for text-embedding-004
+            return np.zeros((len(texts), 768))
+            
+        self.broken = False
         embeddings = []
         for text in texts:
             try:
-                # Try the newer model first
+                # Try the newer model first with the full resource name
                 try:
                     response = self.client.models.embed_content(
-                        model='text-embedding-004',
+                        model='models/text-embedding-004',
                         contents=text,
                     )
-                except Exception as model_err:
-                    if '404' in str(model_err):
-                        # Fallback to the universally available older model
-                        response = self.client.models.embed_content(
-                            model='models/embedding-001',
-                            contents=text,
-                        )
-                    else:
-                        raise model_err
+                except Exception:
+                    # Fallback to the universally available older model
+                    response = self.client.models.embed_content(
+                        model='models/embedding-001',
+                        contents=text,
+                    )
                         
                 if hasattr(response, 'embeddings'):
                      embeddings.append(response.embeddings[0].values)
@@ -47,6 +46,7 @@ class GeminiEmbedder:
                      embeddings.append(response['embedding'])
             except Exception as e:
                 logger.error(f"Gemini embedding error: {e}")
+                self.broken = True
                 embeddings.append([0.0] * 768)
                 
         return np.array(embeddings).astype('float32')
@@ -143,6 +143,10 @@ def get_kenyan_fallback(user_text: str) -> str:
     if e is not None and _expert_index is not None and _expert_archive is not None:
         try:
             query_vec = e.encode([user_text])
+            # If the embedding actually failed, don't search
+            if getattr(e, 'broken', False):
+                 raise Exception("Embedding failed")
+            
             D, I = _expert_index.search(query_vec.astype('float32'), 1)
             match_idx = I[0][0]
             if match_idx != -1 and match_idx < len(_expert_archive):
@@ -158,7 +162,7 @@ def get_kenyan_fallback(user_text: str) -> str:
     # 3. Local KNOWLEDGE_BASE FAISS search
     local_e = embedder
     local_i = index
-    if local_e is None or local_i is None:
+    if local_e is None or local_i is None or getattr(local_e, 'broken', False):
         return "I am here and I'm listening. Your thoughts are safe in this sanctuary."
 
     try:
