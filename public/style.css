@@ -757,3 +757,61 @@ body {
     0%, 100% { opacity: 0.2; transform: translateY(0); }
     50%       { opacity: 1;   transform: translateY(-3px); }
 }
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+    /* Gateway */
+    .gateway-content {
+        padding: 1.5rem 1rem;
+        gap: 1.5rem;
+    }
+    .gateway-wordmark {
+        font-size: clamp(2.8rem, 12vw, 4rem);
+    }
+    .gateway-btn {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Sanctuary Manual Modal */
+    .modal-overlay {
+        padding: 0.5rem;
+    }
+    .modal-glass {
+        max-height: 95vh;
+        border-radius: 12px;
+    }
+    .modal-header, .modal-body, .modal-footer {
+        padding: 1.2rem 1rem;
+    }
+    .emergency-contacts li {
+        flex-direction: column;
+        gap: 0.3rem;
+        padding-bottom: 0.5rem;
+    }
+    .ec-badge {
+        align-self: flex-start;
+    }
+    
+    /* Chat Sanctuary */
+    #sanctuary-root {
+        padding: 0 0.5rem;
+    }
+    .top-nav {
+        padding: 1rem 0;
+    }
+    .msg {
+        max-width: 92%;
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+    }
+    .input-container {
+        padding: 1rem 0 1.5rem;
+    }
+    #entry-input {
+        padding: 0.8rem 1rem;
+    }
+}
