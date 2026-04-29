@@ -326,8 +326,8 @@ class ConnectionManager:
         self.matches[id1] = id2
         self.matches[id2] = id1
         
-        await self.send_system_msg(id1, f"Connected to a {level}. Your diary is listening.")
-        await self.send_system_msg(id2, f"Connected to a {level}. Your diary is listening.")
+        await self.send_system_msg(id1, f"Connected to a peer ({level}). Your diary is listening.")
+        await self.send_system_msg(id2, f"Connected to a peer ({level}). Your diary is listening.")
 
     def disconnect(self, session_id: str):
         peer_id = self.matches.get(session_id)
@@ -504,37 +504,15 @@ class ConnectionManager:
         
         # Case 2: User is talking to AI
         elif sender_id in self.ai_sessions:
-            # Check if there's a high-depth match available in the lobby now
+            # Check if there's a match available in the network now
             if depth > 0.5:
-                # Try to find a human match who is also high depth or just available
-                await self.try_priority_match(sender_id)
+                # Instantly hijack an AI session if available
+                found = await self.find_peer(sender_id)
+                if found:
+                    return # Successfully paired, Sentinel steps aside
             
-            if sender_id in self.ai_sessions: # Might have been matched above
+            if sender_id in self.ai_sessions: 
                 await self.handle_ai_chat(sender_id, message, depth=depth)
-
-    async def try_priority_match(self, session_id: str):
-        """
-        Crisis preemption: when a user's depth ≥ 0.5, promote them to the
-        front of any available regional lobby before falling through to AI.
-        Checks normalised room keys in order: sub-county → county → national.
-        """
-        data = self.user_data.get(session_id)
-        if not data:
-            return
-
-        county    = data["county"]
-        sub_county = data["sub_county"]
-
-        for loc, label in [
-            (self._room_key(sub_county), "priority local peer"),
-            (self._room_key(county),     "priority regional peer"),
-            ("room_kenya_national",       "priority national peer"),
-        ]:
-            if self.lobby.get(loc):
-                peer_id = self.lobby[loc].pop(0)
-                await self.pair_users(session_id, peer_id, label)
-                logger.info(f"[CRISIS] {session_id} preemptively matched to {peer_id} via {loc}")
-                return
 
 manager = ConnectionManager()
 
