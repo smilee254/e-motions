@@ -76,12 +76,19 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
 
     // Open the WebSocket NOW — curtain waits for onopen
     // IMPORTANT: Replace this URL with your actual Render/Railway backend URL once deployed!
-    const BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
+    // AUTO-DETECT BACKEND: 
+    // If we are on Render, use the current host. 
+    // If we are on Vercel, use the hardcoded Render backend.
+    let BACKEND_WS_URL;
+    if (window.location.hostname.includes('render.com')) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        BACKEND_WS_URL = `${protocol}//${window.location.host}/ws`;
+    } else {
+        BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
+    }
     
-    // For local development, uncomment the line below:
-    // const BACKEND_WS_URL = `ws://${window.location.host}/ws`;
-
-    gatewaySocket   = new WebSocket(BACKEND_WS_URL);
+    console.log("Connecting to Sanctuary at:", BACKEND_WS_URL);
+    gatewaySocket = new WebSocket(BACKEND_WS_URL);
 
     // SUCCESS — handshake confirmed → open the curtain
     gatewaySocket.onopen = () => {
