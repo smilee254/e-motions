@@ -1,0 +1,6 @@
+api/
+data/
+*.py
+requirements.txt
+Procfile
+download_db.sh
