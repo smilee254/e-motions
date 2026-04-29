@@ -4,6 +4,9 @@ from sqlalchemy.orm import sessionmaker, Session
 import datetime
 from typing import Optional
 
+import os
+os.makedirs("./data", exist_ok=True)
+
 SQLALCHEMY_DATABASE_URL = "sqlite:///./data/emotions_local.db"
 
 engine = create_engine(
