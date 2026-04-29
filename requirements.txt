@@ -11,3 +11,4 @@ python-dotenv
 geoip2
 faiss-cpu
 pandas
+pyarrow

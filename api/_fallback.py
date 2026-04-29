@@ -22,22 +22,32 @@ class GeminiEmbedder:
     def encode(self, texts):
         if not self.client:
             return np.zeros((len(texts), 768)) # Dummy fallback size for text-embedding-004
-            
         embeddings = []
         for text in texts:
             try:
-                response = self.client.models.embed_content(
-                    model='text-embedding-004',
-                    contents=text,
-                )
-                # handle both genai.types.EmbedContentResponse and dict/list returns
+                # Try the newer model first
+                try:
+                    response = self.client.models.embed_content(
+                        model='text-embedding-004',
+                        contents=text,
+                    )
+                except Exception as model_err:
+                    if '404' in str(model_err):
+                        # Fallback to the universally available older model
+                        response = self.client.models.embed_content(
+                            model='models/embedding-001',
+                            contents=text,
+                        )
+                    else:
+                        raise model_err
+                        
                 if hasattr(response, 'embeddings'):
                      embeddings.append(response.embeddings[0].values)
                 else:
                      embeddings.append(response['embedding'])
             except Exception as e:
                 logger.error(f"Gemini embedding error: {e}")
-                embeddings.append([0.0] * 768) # Fallback zero vector
+                embeddings.append([0.0] * 768)
                 
         return np.array(embeddings).astype('float32')
 

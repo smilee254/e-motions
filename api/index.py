@@ -52,12 +52,25 @@ else:
     ai_client = None
 
 # --- Local GeoIP Configuration ---
-GEOIP_DB_PATH = os.path.join("api", "dbip-city-lite.mmdb")
-try:
-    geoip_reader = geoip2.database.Reader(GEOIP_DB_PATH)
-except Exception as e:
-    logger.error(f"Failed to load GeoIP database: {e}")
-    geoip_reader = None
+# Check multiple possible paths for the database
+GEOIP_SEARCH_PATHS = [
+    os.path.join("api", "dbip-city-lite.mmdb"),
+    "dbip-city-lite.mmdb",
+    os.path.join(os.path.dirname(__file__), "dbip-city-lite.mmdb")
+]
+
+geoip_reader = None
+for path in GEOIP_SEARCH_PATHS:
+    if os.path.exists(path):
+        try:
+            geoip_reader = geoip2.database.Reader(path)
+            logger.info(f"Loaded GeoIP database from: {path}")
+            break
+        except Exception as e:
+            logger.error(f"Error loading GeoIP from {path}: {e}")
+
+if not geoip_reader:
+    logger.warning("No GeoIP database found. Location lookups will use fallbacks.")
 
 # --- Sentinel Expert Brain (CounselChat) ---
 EXPERT_INDEX_PATH = os.path.join("api", "expert_archive", "sentinel_brain.index")
