@@ -1,16 +1,47 @@
-from sentence_transformers import SentenceTransformer
+from google import genai
+import os
+from dotenv import load_dotenv
+import numpy as np
 import faiss
 import logging
 
 # Configure logging
 logger = logging.getLogger("e-motions-fallback")
 
-# Load the lightweight model (approx 80MB)
-try:
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
-except Exception as e:
-    logger.error(f"Failed to load sentence-transformer: {e}")
-    embedder = None
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
+
+class GeminiEmbedder:
+    def __init__(self):
+        if GOOGLE_API_KEY:
+            self.client = genai.Client(api_key=GOOGLE_API_KEY)
+        else:
+            self.client = None
+            logger.warning("No GEMINI_API_KEY found. Embeddings will not work.")
+
+    def encode(self, texts):
+        if not self.client:
+            return np.zeros((len(texts), 768)) # Dummy fallback size for text-embedding-004
+            
+        embeddings = []
+        for text in texts:
+            try:
+                response = self.client.models.embed_content(
+                    model='text-embedding-004',
+                    contents=text,
+                )
+                # handle both genai.types.EmbedContentResponse and dict/list returns
+                if hasattr(response, 'embeddings'):
+                     embeddings.append(response.embeddings[0].values)
+                else:
+                     embeddings.append(response['embedding'])
+            except Exception as e:
+                logger.error(f"Gemini embedding error: {e}")
+                embeddings.append([0.0] * 768) # Fallback zero vector
+                
+        return np.array(embeddings).astype('float32')
+
+embedder = GeminiEmbedder()
 
 # Regional Support Contacts (Kenyan Context)
 REGIONAL_CONTACTS = {
