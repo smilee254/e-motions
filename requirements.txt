@@ -6,7 +6,7 @@ sqlalchemy
 pydantic
 pydantic-settings
 alt-profanity-check
-google-generativeai
+google-genai
 python-dotenv
 geoip2
 sentence-transformers
