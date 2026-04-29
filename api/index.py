@@ -183,9 +183,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="e-motions API", lifespan=lifespan)
 
 # Allow Vercel/Frontend access
-# In production, VERCEL_URL is provided by the platform
-vercel_url = os.getenv("VERCEL_URL")
-allowed_origins = [f"https://{vercel_url}"] if vercel_url else ["*"]
+# Allow Vercel/Frontend access
+# IMPORTANT: Replace the VERCEL_DOMAIN placeholder with your actual frontend URL after deploying to Vercel
+VERCEL_DOMAIN = "e-motions-frontend.vercel.app" 
+allowed_origins = [
+    f"https://{VERCEL_DOMAIN}",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "*" # Can be removed later for stricter security
+]
 
 app.add_middleware(
     CORSMiddleware,

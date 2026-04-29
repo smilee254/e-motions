@@ -75,8 +75,13 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
     btn.style.opacity = '0.7';
 
     // Open the WebSocket NOW — curtain waits for onopen
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    gatewaySocket   = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    // IMPORTANT: Replace this URL with your actual Render/Railway backend URL once deployed!
+    const BACKEND_WS_URL = 'wss://your-render-app-name.onrender.com/ws';
+    
+    // For local development, uncomment the line below:
+    // const BACKEND_WS_URL = `ws://${window.location.host}/ws`;
+
+    gatewaySocket   = new WebSocket(BACKEND_WS_URL);
 
     // SUCCESS — handshake confirmed → open the curtain
     gatewaySocket.onopen = () => {
