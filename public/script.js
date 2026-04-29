@@ -76,7 +76,7 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
 
     // Open the WebSocket NOW — curtain waits for onopen
     // IMPORTANT: Replace this URL with your actual Render/Railway backend URL once deployed!
-    const BACKEND_WS_URL = 'wss://your-render-app-name.onrender.com/ws';
+    const BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
     
     // For local development, uncomment the line below:
     // const BACKEND_WS_URL = `ws://${window.location.host}/ws`;
