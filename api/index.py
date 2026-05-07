@@ -1,4 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import Dict, List, Set, cast, Any
@@ -26,8 +27,10 @@ from api._database import (
     UserProfile,
     log_feedback,
     update_preferences,
-    get_preferences
+    get_preferences,
+    ExpertBrainData
 )
+import json
 from api._fallback import (
     get_kenyan_fallback, 
     get_regional_grounding, 
@@ -120,29 +123,70 @@ TONE SPECIFICATIONS:
 DATA USAGE:
 When you receive 'Expert Advice' from the local archive, do not quote it verbatim. Instead, let that expert knowledge inform your 'Human' response.
 """
-# --- Sentinel Hidden Reasoning Layer (3-Stage Thinker Pipeline) ---
-SENTINEL_THINKER_PROMPT = """
-[INTERNAL MONOLOGUE - DO NOT SHOW TO USER]
+# --- Sentinel Brain Analysis Layer (The Thinker) ---
+SENTINEL_ANALYSIS_PROMPT = """
+Analyze the user's message in a Kenyan peer-support context. Return ONLY a valid JSON object.
+User Message: "{message}"
 
-STAGE 1 — CULTURAL CONTEXT CHECK (Kenyan Nuance Gate):
-- Is the user invoking Kenyan-specific stressors? (e.g., Black Tax, Sapa, KCSE pressure, Hustler Fund, land disputes, chama obligations, gender-based violence, tribal/ethnic references)
-- If yes: weave that cultural reality into your response — do NOT treat it as a generic Western mental-health scenario.
-- Note the user's county. Is this a high-density urban area (Nairobi, Mombasa, Kisumu) or rural/peri-urban (Kiambu, Murang'a, Kwale)? Adjust tone accordingly — rural users often need more grounded, community-based framing.
+JSON Schema:
+{
+  "negation_count": int, 
+  "intent": "social" | "validation" | "support" | "crisis",
+  "keywords": ["list", "of", "fetch", "words"],
+  "sentiment": float (-1.0 to 1.0),
+  "negation_rule_applied": boolean,
+  "cultural_stressor": string | null
+}
 
-STAGE 2 — REFLECTIVE LISTENING (Mirror Before Solving):
-- Before ANY advice or resource, mirror the user's specific pain back to them.
-- Use their exact words where possible (e.g., if they say 'I'm tired of being the strong one', reply 'It sounds like carrying everyone else's weight has left nothing for you').
-- Do NOT jump to solutions. Ask one open-ended question maximum.
-- Avoid: 'Have you tried...', 'You should...', 'I recommend...' — these break the peer-support contract.
-
-STAGE 3 — RESPONSE SYNTHESIS:
-- Integrate Stage 1 (cultural lens) + Stage 2 (reflective mirror) into a single, flowing human response.
-- Max 3 sentences. No bullet points. No clinical language.
-- End with a gentle open question OR a grounding phrase, not a directive.
-
-[RESPONSE - SHOW TO USER]
-Generate the Stage 3 synthesised response only. The user never sees the monologue above.
+Negation Rule: If negation_count is odd, the sentiment is flipped. Example: "I am not happy" -> negation_count: 1, sentiment: -0.8.
 """
+
+async def thinker_analyze(message: str) -> Dict[str, Any]:
+    """Uses Gemini to perform semantic analysis of the user input."""
+    if not ai_client:
+        return {"negation_count": 0, "intent": "support", "keywords": [], "sentiment": 0.0, "negation_rule_applied": False, "cultural_stressor": None}
+    
+    try:
+        prompt = SENTINEL_ANALYSIS_PROMPT.format(message=message)
+        response = await asyncio.to_thread(
+            ai_client.models.generate_content,
+            model=AI_MODEL_NAME,
+            contents=prompt
+        )
+        raw_text = response.text.strip().strip("`").replace("json", "").strip()
+        analysis = json.loads(raw_text)
+        return analysis
+    except Exception as e:
+        logger.error(f"Thinker Analysis Error: {e}")
+        return {"negation_count": 0, "intent": "support", "keywords": [message[:20]], "sentiment": 0.0, "negation_rule_applied": False, "cultural_stressor": None}
+
+def fetch_expert_advice(keywords: List[str], message: str) -> str:
+    """Combines keyword SQL search with FAISS vector search for the best advice."""
+    db = SessionLocal()
+    context = ""
+    try:
+        # 1. Keyword search in SQLite (Priority)
+        if keywords:
+            search_clause = " OR ".join([f"question LIKE :k{i}" for i in range(len(keywords))])
+            params = {f"k{i}": f"%{k}%" for i, k in enumerate(keywords)}
+            sql_matches = db.query(ExpertBrainData).filter(text(search_clause)).params(**params).limit(2).all()
+            for match in sql_matches:
+                context += f"\nExpert Advice (Keyword Match): {match.answer[:400]}..."
+
+        # 2. Vector search (FAISS) as fallback/supplement
+        if expert_index is not None and expert_archive is not None and embedder is not None:
+            query_vec = embedder.encode([message])
+            D, I = expert_index.search(query_vec.astype('float32'), 2)
+            for idx in I[0]:
+                if idx != -1:
+                    ans = expert_archive.iloc[idx]['answerText']
+                    if ans not in context: # Avoid duplicates
+                        context += f"\nExpert Wisdom (Vector Match): {ans[:400]}..."
+    except Exception as e:
+        logger.error(f"Retrieval Error: {e}")
+    finally:
+        db.close()
+    return context
 
 async def get_user_geo(ip: str):
     """
@@ -377,11 +421,10 @@ class ConnectionManager:
 
     async def handle_ai_chat(self, session_id: str, message: str, is_nudge: bool = False, depth: float = 0.0):
         """
-        Generates a compassionate AI response with:
-        - Intent-Based Routing (Social / Validation / Expert)
-        - 3-Stage Thinker Pipeline (Cultural → Reflective → Synthesised)
-        - Human Processing Delay (1.2–2.5 s jitter) to prevent robotic cadence
-        - Crisis (depth ≥ 0.7) sessions are answered immediately without delay
+        Generates a professional and varied AI response by:
+        1. Analyzing user input into JSON (Intent, Negations, Sentiment, Keywords).
+        2. Fetching relevant expert advice from the database using keywords + vectors.
+        3. Synthesizing a human-like response informed by the analysis.
         """
         try:
             # 1. Retrieve Context & Memory
@@ -395,104 +438,84 @@ class ConnectionManager:
             history = user_meta.get("history", [])[-8:]
             formatted_history = "\n".join([f"{m['role']}: {m['content']}" for m in history])
 
-            # --- PREFERENCE LEARNING (Long-term Memory) ---
-            # If user explicitly states a preference (e.g. "I prefer short answers")
-            if "prefer" in message.lower() or "like" in message.lower():
-                # Use AI to update preferences silently
-                pref_extract_prompt = f"Extract user communication preferences from this message: '{message}'. Previous preferences: {long_term_prefs}. Return ONLY a concise JSON string of all preferences."
-                if ai_client:
-                    try:
-                        pref_resp = await asyncio.to_thread(
-                            ai_client.models.generate_content,
-                            model="gemini-1.5-flash",
-                            contents=pref_extract_prompt
-                        )
-                        new_prefs = pref_resp.text.strip().strip("`").replace("json", "").strip()
-                        if "{" in new_prefs:
-                            update_preferences(session_id, new_prefs)
-                            long_term_prefs = new_prefs
-                    except:
-                        pass
+            # 2. Thinker Analysis (The Brain)
+            analysis = await thinker_analyze(message)
+            intent = analysis.get("intent", "support")
+            keywords = analysis.get("keywords", [])
+            sentiment = analysis.get("sentiment", 0.0)
+            negation_count = analysis.get("negation_count", 0)
+            cultural_stressor = analysis.get("cultural_stressor")
 
-            # --- INTENT ROUTING LOGIC ---
-            user_input_clean = message.lower().strip().strip("?!.")
-            greetings = ["hello", "hi", "hey", "yo", "sup", "habari", "sasa"]
-            positive_words = POSITIVE_SIGNALS
-            response_text = None
+            # 3. Retrieve Expert Wisdom (Hybrid Fetch)
+            expert_context = fetch_expert_advice(keywords, message)
 
-            # LEVEL 1: SOCIAL OVERRIDE (Greetings)
-            if user_input_clean in greetings:
-                response_text = f"Hey! Glad you made it to the sanctuary. I see you're connecting from {region}—how are you really doing today?"
-
-            # LEVEL 2: POSITIVE MOOD — never route to crisis fallback
-            elif any(word in user_input_clean for word in positive_words):
-                response_text = f"Love that! It's always good when things are feeling {user_input_clean}. What's been making it that way?"
-
-            elif len(user_input_clean.split()) < 3 and not is_nudge:
-                vibe_responses = {
-                    "bad": "I'm sorry to hear that. Sometimes the days just feel heavy. Want to tell me more?",
-                    "okay": "Just 'okay' can be a lot sometimes. I'm here if you want to unpack that.",
-                    "tired": "Man, I feel that. Life can really drain you. What's the biggest drain right now?",
-                    "stressed": "Stress has a way of piling up. What's been sitting on your chest lately?",
-                    "sad": "Sadness deserves space too. I'm right here—what's going on?",
-                }
-                response_text = vibe_responses.get(user_input_clean, "I'm listening. Sometimes it's hard to put words to it—take your time. What's on your mind?")
-
-            # LEVEL 3: DEEP LAYER (Expert Brain + AI)
-            if not response_text:
-                # Retrieve Expert Wisdom (Top 3)
-                expert_context = ""
-                if expert_index is not None and expert_archive is not None and embedder is not None:
-                    try:
-                        query_vec = embedder.encode([message])
-                        D, I = expert_index.search(query_vec.astype('float32'), 3)
-                        for idx in I[0]:
-                            if idx != -1:
-                                expert_context += f"\nExpert Wisdom: {expert_archive.iloc[idx]['answerText'][:400]}..."
-                    except Exception as e:
-                        logger.error(f"Expert brain search error: {e}")
-
-                # Build Thinker Prompt (merges Fine-Tune rules + Reasoning structure)
-                if is_nudge:
-                    prompt = f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\nRecent Chat:\n{formatted_history}\nThe user in {region} has been silent. Ask a gentle, peer-like follow up. Max 1 sentence."
-                else:
-                    prompt = f"""
-                    {SENTINEL_FINE_TUNE_PROMPT}
-                    {SENTINEL_THINKER_PROMPT}
-                    
-                    USER PREFERENCES (ADHERE TO THESE): {long_term_prefs}
-                    SENTIMENT GUIDE: {sentiment_guide}
-                    EXPERT CONTEXT: {expert_context}
-                    
-                    Recent Chat Memory:
-                    {formatted_history}
-                    
-                    User in {region}: {message}
-                    """
+            # 4. Build Prompt
+            if is_nudge:
+                prompt = f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\nRecent Chat:\n{formatted_history}\nThe user in {region} has been silent. Ask a gentle, peer-like follow up. Max 1 sentence."
+            else:
+                prompt = f"""
+                {SENTINEL_FINE_TUNE_PROMPT}
                 
-                # Call AI with Fallback
-                if ai_client:
-                    for i in range(3):
-                        try:
-                            response = await asyncio.to_thread(
-                                ai_client.models.generate_content,
-                                model=AI_MODEL_NAME,
-                                contents=prompt
-                            )
-                            raw = response.text
-                            # Strip hidden [INTERNAL MONOLOGUE] — user only sees [RESPONSE]
-                            if "[RESPONSE - SHOW TO USER]" in raw:
-                                response_text = raw.split("[RESPONSE - SHOW TO USER]")[1].strip()
-                            elif "RESPONSE:" in raw:
-                                response_text = raw.split("RESPONSE:")[1].strip()
-                            else:
-                                response_text = raw
+                THINKER ANALYSIS:
+                - Intent: {intent}
+                - Sentiment Score: {sentiment}
+                - Negation Count: {negation_count}
+                - Cultural Context: {cultural_stressor if cultural_stressor else "None detected"}
+                
+                USER PREFERENCES (ADHERE TO THESE): {long_term_prefs}
+                EXPERT CONTEXT: {expert_context}
+                
+                Recent Chat Memory:
+                {formatted_history}
+                
+                User in {region}: {message}
+                
+                FINAL INSTRUCTION:
+                Base your response on the Expert Context but keep the tone 'Human' and 'Peer-to-Peer'.
+                If negations were used (e.g., "I am NOT sad"), ensure your response acknowledges that correctly.
+                Max 3 sentences. No bullet points.
+                """
+            
+            # 5. Call AI
+            response_text = None
+            if ai_client:
+                for i in range(3):
+                    try:
+                        response = await asyncio.to_thread(
+                            ai_client.models.generate_content,
+                            model=AI_MODEL_NAME,
+                            contents=prompt
+                        )
+                        response_text = response.text.strip()
+                        break
+                    except Exception as e:
+                        if "429" in str(e):
+                            await asyncio.sleep((i + 1) * 3)
+                        else:
                             break
-                        except Exception as e:
-                            if "429" in str(e):
-                                await asyncio.sleep((i + 1) * 3)
-                            else:
-                                break
+
+            # FINAL FALLBACK
+            if not response_text:
+                response_text = get_kenyan_fallback(message)
+
+            # Realistic Processing Delay
+            if depth < 0.7 and not is_nudge:
+                await asyncio.sleep(random.uniform(1.2, 2.5))
+
+            # 6. Update Memory & Send
+            if session_id in self.user_data:
+                self.user_data[session_id]["history"].append({"role": "User", "content": message})
+                self.user_data[session_id]["history"].append({"role": "Sentinel", "content": response_text})
+                self.user_data[session_id]["last_interaction"] = {"query": message, "response": response_text}
+
+            if session_id in self.active_connections:
+                await self.active_connections[session_id].send_json({
+                    "type": "peer",
+                    "content": f"[Sentinel]: {response_text}",
+                    "timestamp": str(datetime.datetime.now())
+                })
+        except Exception as e:
+            logger.error(f"AI Error: {e}")
 
             # FINAL FALLBACK (If level 3 fails or wasn't triggered)
             if not response_text:

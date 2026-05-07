@@ -38,6 +38,15 @@ class FeedbackLog(Base):
     correction = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.datetime.now)
 
+class ExpertBrainData(Base):
+    __tablename__ = "expert_brain"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(Text, index=True)
+    answer = Column(Text)
+    source = Column(String)
+    embedding_id = Column(Integer, nullable=True) # Reference to FAISS index if needed
+
 # Initialize database
 Base.metadata.create_all(bind=engine)
 

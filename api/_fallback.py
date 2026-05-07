@@ -30,7 +30,7 @@ class GeminiEmbedder:
                 # Try the newer model first with the full resource name
                 try:
                     response = self.client.models.embed_content(
-                        model='models/text-embedding-004',
+                        model='models/gemini-embedding-001',
                         contents=text,
                     )
                 except Exception:
