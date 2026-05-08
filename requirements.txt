@@ -8,9 +8,9 @@ pydantic-settings
 google-genai
 python-dotenv
 geoip2
-faiss-cpu
-pandas
+qdrant-client
 pyarrow
-# sentence-transformers — local dev only (needed for _build_brain.py and continue_transfer.py)
-# Do NOT add back here: PyTorch dependency uses 200-300MB RAM, exceeds Render 512MB free tier.
-# Install locally with: pip install sentence-transformers
+# Removed from production (local dev only — too heavy for Render 512MB free tier):
+# faiss-cpu    — replaced by Qdrant Cloud (HTTP-based, no local ML needed)
+# pandas       — only needed in _build_brain.py / continue_transfer.py local scripts
+# sentence-transformers — PyTorch dep, 200-300MB RAM alone

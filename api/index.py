@@ -12,11 +12,10 @@ import asyncio
 import random
 from contextlib import asynccontextmanager
 
-import pandas as pd
-import faiss
 import geoip2.database
 from google import genai
 from dotenv import load_dotenv
+from qdrant_client import QdrantClient
 
 from api._database import (
     create_user_profile, 
@@ -35,9 +34,7 @@ from api._fallback import (
     get_regional_grounding, 
     detect_depth, 
     REGIONAL_CONTACTS, 
-    load_expert_brain_refs,
-    POSITIVE_SIGNALS,
-    embedder
+    POSITIVE_SIGNALS
 )
 
 
@@ -52,6 +49,10 @@ logger = logging.getLogger("e-motions-api")
 # The "Silent Operator" Protocol: Fetching keys
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 IP_TOKEN = os.getenv("IPINFO_TOKEN")
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "sentinel_brain")
+EMBED_MODEL = "models/gemini-embedding-001"  # 3072-dim, HTTP-only, no PyTorch
 
 if GOOGLE_API_KEY:
     # Modern 2026 SDK Initialization
@@ -61,6 +62,17 @@ if GOOGLE_API_KEY:
 else:
     print("⚠️ WARNING: Sentinel is offline. Gemini Key missing.")
     ai_client = None
+
+# --- Qdrant Cloud client (lightweight HTTP, no PyTorch required) ---
+qdrant_client = None
+if QDRANT_URL and QDRANT_API_KEY:
+    try:
+        qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=10)
+        logger.info("Qdrant Cloud client initialized ✓")
+    except Exception as e:
+        logger.warning(f"Qdrant init failed: {e}. Will use SQL-only retrieval.")
+else:
+    logger.warning("QDRANT_URL/QDRANT_API_KEY not set. Using SQL-only retrieval.")
 
 # --- Local GeoIP Configuration ---
 # Check multiple possible paths for the database
@@ -82,26 +94,6 @@ for path in GEOIP_SEARCH_PATHS:
 
 if not geoip_reader:
     logger.warning("No GeoIP database found. Location lookups will use fallbacks.")
-
-# --- Sentinel Expert Brain (CounselChat) ---
-EXPERT_INDEX_PATH = os.path.join("api", "expert_archive", "sentinel_brain.index")
-EXPERT_PKL_PATH = os.path.join("api", "expert_archive", "expert_archive.pkl")
-expert_index = None
-expert_archive = None
-
-def load_expert_brain():
-    global expert_index, expert_archive
-    try:
-        if os.path.exists(EXPERT_INDEX_PATH) and os.path.exists(EXPERT_PKL_PATH):
-            expert_index = faiss.read_index(EXPERT_INDEX_PATH)
-            expert_archive = pd.read_pickle(EXPERT_PKL_PATH)
-            # Share refs with fallback.py so it can use them too
-            load_expert_brain_refs(expert_index, expert_archive)
-            logger.info("Sentinel Expert Brain loaded successfully.")
-        else:
-            logger.warning("Sentinel Expert Brain files missing. Run api/build_brain.py first.")
-    except Exception as e:
-        logger.error(f"Failed to load Sentinel Expert Brain: {e}")
 
 # --- Sentinel System Instruction (Fine-Tuned for Expert Data + Human Tone) ---
 SENTINEL_FINE_TUNE_PROMPT = """
@@ -182,33 +174,60 @@ async def thinker_analyze(message: str) -> Dict[str, Any]:
         logger.error(f"Thinker Analysis Error: {e}")
         return defaults
 
-def fetch_expert_advice(keywords: List[str], message: str) -> str:
-    """Combines keyword SQL search with FAISS vector search for the best advice."""
-    db = SessionLocal()
-    context = ""
+def _embed_query(message: str) -> list:
+    """Embed a message via Gemini API (HTTP call, no local ML model)."""
+    if not ai_client:
+        return []
     try:
-        # 1. Keyword search in SQLite (always runs — no embedding needed)
-        if keywords:
+        response = ai_client.models.embed_content(
+            model=EMBED_MODEL,
+            contents=message[:2000],
+        )
+        if hasattr(response, 'embeddings') and response.embeddings:
+            return response.embeddings[0].values
+        elif hasattr(response, 'embedding'):
+            return response.embedding.values
+    except Exception as e:
+        logger.warning(f"Query embedding failed: {e}")
+    return []
+
+
+def fetch_expert_advice(keywords: List[str], message: str) -> str:
+    """Retrieves expert counseling context using Qdrant vector search + SQL keyword fallback."""
+    context = ""
+
+    # 1. PRIMARY: Qdrant Cloud vector search (semantic — finds meaning, not just words)
+    if qdrant_client:
+        try:
+            query_vec = _embed_query(message)
+            if query_vec:
+                results = qdrant_client.query_points(
+                    collection_name=QDRANT_COLLECTION,
+                    query=query_vec,
+                    limit=3,
+                    score_threshold=0.5,  # Only use results with >50% cosine similarity
+                )
+                for hit in results.points:
+                    answer = hit.payload.get("answer", "")
+                    if answer and answer not in context:
+                        context += f"\nExpert Wisdom: {answer[:500]}..."
+        except Exception as e:
+            logger.warning(f"Qdrant search error: {e}")
+
+    # 2. FALLBACK: SQL keyword search (cheap, always available, catches exact matches)
+    if not context and keywords:
+        db = SessionLocal()
+        try:
             search_clause = " OR ".join([f"question LIKE :k{i}" for i in range(len(keywords))])
             params = {f"k{i}": f"%{k}%" for i, k in enumerate(keywords)}
             sql_matches = db.query(ExpertBrainData).filter(text(search_clause)).params(**params).limit(2).all()
             for match in sql_matches:
-                context += f"\nExpert Advice (Keyword Match): {match.answer[:400]}..."
+                context += f"\nExpert Advice: {match.answer[:400]}..."
+        except Exception as e:
+            logger.error(f"SQL Retrieval Error: {e}")
+        finally:
+            db.close()
 
-        # 2. Vector search (FAISS) — only if embedder is available (skipped on Render free tier)
-        if expert_index is not None and expert_archive is not None:
-            query_vec = embedder.encode([message])
-            if query_vec is not None:  # None means embedder unavailable (e.g. sentence-transformers not installed)
-                D, I = expert_index.search(query_vec.astype('float32'), 2)
-                for idx in I[0]:
-                    if idx != -1:
-                        ans = expert_archive.iloc[idx]['answerText']
-                        if ans not in context:
-                            context += f"\nExpert Wisdom (Vector Match): {ans[:400]}..."
-    except Exception as e:
-        logger.error(f"Retrieval Error: {e}")
-    finally:
-        db.close()
     return context
 
 async def get_user_geo(ip: str):
@@ -266,11 +285,8 @@ def is_safe_local(text: str) -> tuple[bool, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load the local AI brain (FAISS index + PKL)
-    logger.info("Spawning Sentinel Local Brain...")
-    load_expert_brain()
-    # NOTE: No warm-up call here. The sentence-transformer model loads lazily
-    # on the first real user query to stay within Render's 512MB memory limit.
+    # Startup: Qdrant Cloud is the retrieval backend — no local model loading needed
+    logger.info("Sentinel starting up. Qdrant Cloud connected for expert retrieval.")
     yield
     # Shutdown: Clean up resources
     logger.info("Sentinel entering hibernation.")
