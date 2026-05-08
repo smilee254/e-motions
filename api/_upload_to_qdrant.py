@@ -30,7 +30,7 @@ QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION = os.getenv("QDRANT_COLLECTION", "sentinel_brain")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-EMBED_MODEL = "models/gemini-embedding-001"  # 3072-dim, available on v1beta
+EMBED_MODEL = "models/gemini-embedding-2"  # 3072-dim, fresh quota
 EMBED_DIM = 3072
 BATCH_SIZE = 50                       # texts per Gemini batch call
 CHECKPOINT_FILE = "api/expert_archive/qdrant_upload_checkpoint.json"
@@ -69,22 +69,24 @@ def save_checkpoint(idx: int):
         json.dump({"last_uploaded_idx": idx}, f)
 
 
-def embed_single(text: str) -> list[float]:
-    """Embed a single text string using Gemini gemini-embedding-001."""
+def embed_batch(texts: list) -> list:
+    """Embed a batch of texts in a SINGLE API call (efficient)."""
     max_retries = 5
     for attempt in range(max_retries):
         try:
+            # The genai SDK supports passing a list of strings directly
             response = gemini_client.models.embed_content(
                 model=EMBED_MODEL,
-                contents=text,
+                contents=texts,
             )
-            # Response has .embeddings list
+            
+            # Extract the embeddings (response.embeddings is a list of objects)
             if hasattr(response, 'embeddings') and response.embeddings:
-                return response.embeddings[0].values
-            elif hasattr(response, 'embedding'):
-                return response.embedding.values
+                return [e.values for e in response.embeddings]
             else:
-                raise ValueError(f"Unexpected response shape: {response}")
+                # Fallback for single-item batch if needed
+                return [response.embedding.values]
+                
         except Exception as e:
             err = str(e)
             if "429" in err or "RESOURCE_EXHAUSTED" in err:
@@ -94,17 +96,7 @@ def embed_single(text: str) -> list[float]:
             else:
                 print(f"  Embedding error: {e}")
                 time.sleep(5)
-    raise RuntimeError("Failed to embed text after all retries")
-
-
-def embed_batch(texts: list) -> list:
-    """Embed a batch one-by-one (Gemini free tier doesn't support true batching)."""
-    vectors = []
-    for text in texts:
-        vec = embed_single(str(text)[:2000])  # cap at 2000 chars
-        vectors.append(vec)
-        time.sleep(0.1)  # small delay between calls
-    return vectors
+    raise RuntimeError("Failed to embed batch after all retries")
 
 
 def main(resume: bool = False):
