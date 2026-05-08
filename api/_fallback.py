@@ -10,26 +10,43 @@ logger = logging.getLogger("e-motions-fallback")
 class LocalEmbedder:
     """
     Lazy-loading sentence-transformer embedder.
-    The model is NOT loaded at import time — it loads on the first encode() call.
-    This saves ~200MB of RAM at startup, keeping Render free-tier within limits.
-    Model: all-MiniLM-L6-v2  |  Dimension: 384  |  No API rate limits.
+    - Model loads on first encode() call, NOT at import time (saves ~200MB at startup)
+    - Returns None if sentence-transformers is not installed (Render free tier)
+    - Callers must check for None before using the result
     """
     def __init__(self):
-        self._model = None  # Deferred until first use
+        self._model = None
+        self._available = None  # None=unknown, True=ok, False=not installed
 
     def _load(self):
+        if self._available is False:
+            return None
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("LocalEmbedder loaded on first use (384-dim).")
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._model = SentenceTransformer('all-MiniLM-L6-v2')
+                self._available = True
+                logger.info("LocalEmbedder loaded on first use (384-dim).")
+            except ImportError:
+                self._available = False
+                logger.info("sentence-transformers not installed — FAISS disabled, SQL search active.")
+                return None
+            except Exception as e:
+                self._available = False
+                logger.error(f"Failed to load LocalEmbedder: {e}")
+                return None
         return self._model
 
     def encode(self, texts):
+        """Returns float32 ndarray, or None if the embedder is unavailable."""
+        model = self._load()
+        if model is None:
+            return None
         try:
-            return self._load().encode(texts, convert_to_numpy=True).astype('float32')
+            return model.encode(texts, convert_to_numpy=True).astype('float32')
         except Exception as e:
             logger.error(f"LocalEmbedder encode error: {e}")
-            return np.zeros((len(texts), 384), dtype='float32')
+            return None
 
 
 embedder = LocalEmbedder()
@@ -127,6 +144,8 @@ def get_kenyan_fallback(user_text: str) -> str:
     if _expert_index is not None and _expert_archive is not None:
         try:
             query_vec = embedder.encode([user_text])
+            if query_vec is None:
+                raise Exception("Embedder unavailable")
             D, I = _expert_index.search(query_vec.astype('float32'), 1)
             match_idx = I[0][0]
             if match_idx != -1 and match_idx < len(_expert_archive):

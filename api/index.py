@@ -188,7 +188,7 @@ def fetch_expert_advice(keywords: List[str], message: str) -> str:
     db = SessionLocal()
     context = ""
     try:
-        # 1. Keyword search in SQLite (Priority)
+        # 1. Keyword search in SQLite (always runs — no embedding needed)
         if keywords:
             search_clause = " OR ".join([f"question LIKE :k{i}" for i in range(len(keywords))])
             params = {f"k{i}": f"%{k}%" for i, k in enumerate(keywords)}
@@ -196,15 +196,16 @@ def fetch_expert_advice(keywords: List[str], message: str) -> str:
             for match in sql_matches:
                 context += f"\nExpert Advice (Keyword Match): {match.answer[:400]}..."
 
-        # 2. Vector search (FAISS) as fallback/supplement
-        if expert_index is not None and expert_archive is not None and embedder is not None:
+        # 2. Vector search (FAISS) — only if embedder is available (skipped on Render free tier)
+        if expert_index is not None and expert_archive is not None:
             query_vec = embedder.encode([message])
-            D, I = expert_index.search(query_vec.astype('float32'), 2)
-            for idx in I[0]:
-                if idx != -1:
-                    ans = expert_archive.iloc[idx]['answerText']
-                    if ans not in context: # Avoid duplicates
-                        context += f"\nExpert Wisdom (Vector Match): {ans[:400]}..."
+            if query_vec is not None:  # None means embedder unavailable (e.g. sentence-transformers not installed)
+                D, I = expert_index.search(query_vec.astype('float32'), 2)
+                for idx in I[0]:
+                    if idx != -1:
+                        ans = expert_archive.iloc[idx]['answerText']
+                        if ans not in context:
+                            context += f"\nExpert Wisdom (Vector Match): {ans[:400]}..."
     except Exception as e:
         logger.error(f"Retrieval Error: {e}")
     finally:
@@ -258,11 +259,11 @@ def is_safe_local(text: str) -> tuple[bool, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load the local AI brain once
+    # Startup: Load the local AI brain (FAISS index + PKL)
     logger.info("Spawning Sentinel Local Brain...")
     load_expert_brain()
-    # This warm-up ensures the first response is instant
-    get_kenyan_fallback("Habari")
+    # NOTE: No warm-up call here. The sentence-transformer model loads lazily
+    # on the first real user query to stay within Render's 512MB memory limit.
     yield
     # Shutdown: Clean up resources
     logger.info("Sentinel entering hibernation.")

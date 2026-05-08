@@ -12,4 +12,6 @@ geoip2
 faiss-cpu
 pandas
 pyarrow
-sentence-transformers
+# sentence-transformers — local dev only (needed for _build_brain.py and continue_transfer.py)
+# Do NOT add back here: PyTorch dependency uses 200-300MB RAM, exceeds Render 512MB free tier.
+# Install locally with: pip install sentence-transformers
