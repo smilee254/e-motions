@@ -1,17 +1,33 @@
+"""
+Sentinel Expert Brain — Full Rebuild Script
+============================================
+Run this to build the FAISS index + SQLite DB from scratch.
+
+Uses sentence-transformers (all-MiniLM-L6-v2, 384-dim) for embedding.
+- No API rate limits
+- Fully offline after model download
+- Consistent with the runtime embedder in _fallback.py
+
+Usage:
+    PYTHONPATH=. python3 api/_build_brain.py
+"""
+
 import pandas as pd
 from datasets import load_dataset
 import numpy as np
 import faiss
 import os
-import time
-from google import genai
-from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 from api._database import SessionLocal, ExpertBrainData
 
-load_dotenv()
+# 1. Load Embedder
+print("Loading sentence-transformer embedder (all-MiniLM-L6-v2)...")
+st_model = SentenceTransformer('all-MiniLM-L6-v2')
+DIM = st_model.get_embedding_dimension()
+print(f"Embedder ready. Dimension: {DIM}")
 
-# 1. Pulling High-Fidelity Archives (CounselChat & MentalChat16K)
-print("Downloading CounselChat & MentalChat archives...")
+# 2. Pull Expert Archives (CounselChat + MentalChat16K)
+print("\nDownloading CounselChat & MentalChat archives...")
 try:
     ds_counsel = load_dataset("nbertagnolli/counsel-chat")
     ds_mental = load_dataset("heliosbrahma/mental_health_chatbot_dataset")
@@ -19,7 +35,7 @@ except Exception as e:
     print(f"Error downloading datasets: {e}")
     exit(1)
 
-# 2. Extracting Expert Responses
+# 3. Extract Expert Q&A Pairs
 df_counsel = pd.DataFrame(ds_counsel['train'])[['questionText', 'answerText']]
 
 def parse_mental_health(text):
@@ -34,63 +50,53 @@ mental_rows = [parse_mental_health(row['text']) for row in ds_mental['train']]
 df_mental = pd.DataFrame([r for r in mental_rows if r[0]], columns=['questionText', 'answerText'])
 
 expert_archive = pd.concat([df_counsel, df_mental], ignore_index=True).dropna()
+print(f"Total expert cases: {len(expert_archive)}")
 
-# 3. Generating Semantic Embeddings
-print(f"Embedding {len(expert_archive)} expert cases using Gemini...")
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=GOOGLE_API_KEY)
+# 4. Generate Embeddings in Batches
+print(f"\nEmbedding {len(expert_archive)} expert questions...")
+BATCH_SIZE = 64
 
-embeddings = []
-texts_to_embed = expert_archive['questionText'].tolist()
+all_embeddings = []
+questions = expert_archive['questionText'].tolist()
 
-for i, text in enumerate(texts_to_embed):
-    if i % 100 == 0:
-        print(f"Progress: {i}/{len(texts_to_embed)}")
-    try:
-        response = client.models.embed_content(
-            model='models/gemini-embedding-001',
-            contents=text,
-        )
-        if hasattr(response, 'embeddings'):
-            embeddings.append(response.embeddings[0].values)
-        else:
-            embeddings.append(response['embedding'])
-    except Exception as e:
-        print(f"Error on index {i}: {e}")
-        if "429" in str(e):
-            time.sleep(60)
-        embeddings.append([0.0] * 768)
+for i in range(0, len(questions), BATCH_SIZE):
+    batch = questions[i: i + BATCH_SIZE]
+    vecs = st_model.encode(batch, convert_to_numpy=True).astype('float32')
+    all_embeddings.extend(vecs)
+    print(f"  Embedded {min(i + BATCH_SIZE, len(questions))}/{len(questions)}")
 
-embeddings = np.array(embeddings).astype('float32')
+embeddings = np.array(all_embeddings).astype('float32')
 
-# 4. Save the Local FAISS Index
-embeddings_f16 = embeddings.astype(np.float16)
-index = faiss.IndexFlatL2(embeddings_f16.shape[1])
-index.add(embeddings_f16.astype('float32'))
-
+# 5. Build and Save FAISS Index
 os.makedirs("api/expert_archive", exist_ok=True)
+index = faiss.IndexFlatL2(DIM)
+index.add(embeddings)
 faiss.write_index(index, "api/expert_archive/sentinel_brain.index")
 expert_archive.to_pickle("api/expert_archive/expert_archive.pkl")
+print(f"\nFAISS index saved: {index.ntotal} vectors @ {DIM}-dim")
 
-# 5. Populate SQLite Database
-print(f"Populating SQLite database with {len(expert_archive)} expert records...")
+# 6. Populate SQLite Database
+print(f"Populating SQLite with {len(expert_archive)} records...")
 db = SessionLocal()
 try:
     db.query(ExpertBrainData).delete()
     for i, row in expert_archive.iterrows():
-        entry = ExpertBrainData(
+        db.add(ExpertBrainData(
             question=row['questionText'],
             answer=row['answerText'],
             source="CounselChat/MentalChat",
             embedding_id=i
-        )
-        db.add(entry)
+        ))
+        if i % 500 == 0:
+            db.commit()
+            print(f"  SQL: {i}/{len(expert_archive)}")
     db.commit()
-    print("Database population complete.")
+    print("SQLite population complete.")
 except Exception as e:
-    print(f"Error populating database: {e}")
+    print(f"SQL Error: {e}")
     db.rollback()
 finally:
     db.close()
 
-print("Success! Sentinel Expert Brain is fully loaded.")
+print("\n✅ Sentinel Expert Brain fully rebuilt.")
+print(f"   FAISS: {index.ntotal} vectors | SQL: {len(expert_archive)} records")

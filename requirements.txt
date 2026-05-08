@@ -12,3 +12,4 @@ geoip2
 faiss-cpu
 pandas
 pyarrow
+sentence-transformers

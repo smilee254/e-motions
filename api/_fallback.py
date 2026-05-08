@@ -1,6 +1,4 @@
-from google import genai
 import os
-from dotenv import load_dotenv
 import numpy as np
 import faiss
 import logging
@@ -8,50 +6,34 @@ import logging
 # Configure logging
 logger = logging.getLogger("e-motions-fallback")
 
-load_dotenv()
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 
-class GeminiEmbedder:
+class LocalEmbedder:
+    """
+    Local sentence-transformer embedder.
+    - Model: all-MiniLM-L6-v2
+    - Dimension: 384 (matches the existing FAISS index)
+    - No API key, no rate limits, runs fully offline.
+    """
     def __init__(self):
-        if GOOGLE_API_KEY:
-            self.client = genai.Client(api_key=GOOGLE_API_KEY)
-        else:
-            self.client = None
-            logger.warning("No GEMINI_API_KEY found. Embeddings will not work.")
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("LocalEmbedder ready — sentence-transformers all-MiniLM-L6-v2 (384-dim).")
+        except Exception as e:
+            logger.error(f"Failed to load LocalEmbedder: {e}")
+            self.model = None
 
     def encode(self, texts):
-        if not self.client:
-            return np.zeros((len(texts), 768))
-            
-        self.broken = False
-        embeddings = []
-        for text in texts:
-            try:
-                # Try the newer model first with the full resource name
-                try:
-                    response = self.client.models.embed_content(
-                        model='models/gemini-embedding-001',
-                        contents=text,
-                    )
-                except Exception:
-                    # Fallback to the universally available older model
-                    response = self.client.models.embed_content(
-                        model='models/embedding-001',
-                        contents=text,
-                    )
-                        
-                if hasattr(response, 'embeddings'):
-                     embeddings.append(response.embeddings[0].values)
-                else:
-                     embeddings.append(response['embedding'])
-            except Exception as e:
-                logger.error(f"Gemini embedding error: {e}")
-                self.broken = True
-                embeddings.append([0.0] * 768)
-                
-        return np.array(embeddings).astype('float32')
+        if not self.model:
+            return np.zeros((len(texts), 384), dtype='float32')
+        try:
+            return self.model.encode(texts, convert_to_numpy=True).astype('float32')
+        except Exception as e:
+            logger.error(f"LocalEmbedder encode error: {e}")
+            return np.zeros((len(texts), 384), dtype='float32')
 
-embedder = GeminiEmbedder()
+
+embedder = LocalEmbedder()
 
 # Regional Support Contacts (Kenyan Context)
 REGIONAL_CONTACTS = {
@@ -134,24 +116,21 @@ def get_kenyan_fallback(user_text: str) -> str:
     user_lower = user_text.lower()
 
     # 1. Positivity Guard — short-circuit before any FAISS search
-    if any(word in user_lower for word in POSITIVE_SIGNALS):
+    # Only fire if there are NO negation words in the message (prevents "not happy" → positive reply)
+    _negations = ["not ", "never ", "don't ", "can't ", "won't ", "isn't ", "aren't ", "wasn't ", "no "]
+    _has_negation = any(neg in user_lower for neg in _negations)
+    if not _has_negation and any(word in user_lower for word in POSITIVE_SIGNALS):
         import random
         return random.choice(POSITIVE_RESPONSES)
 
     # 2. Try Expert Brain first (CounselChat + MentalChat16K)
-    e = embedder
-    if e is not None and _expert_index is not None and _expert_archive is not None:
+    if _expert_index is not None and _expert_archive is not None:
         try:
-            query_vec = e.encode([user_text])
-            # If the embedding actually failed, don't search
-            if getattr(e, 'broken', False):
-                 raise Exception("Embedding failed")
-            
+            query_vec = embedder.encode([user_text])
             D, I = _expert_index.search(query_vec.astype('float32'), 1)
             match_idx = I[0][0]
             if match_idx != -1 and match_idx < len(_expert_archive):
                 raw = _expert_archive.iloc[match_idx]['answerText']
-                # Trim to a conversational length
                 raw_str = str(raw).strip()
                 if len(raw_str) > 280:
                     return raw_str[:280] + "..."
@@ -160,14 +139,12 @@ def get_kenyan_fallback(user_text: str) -> str:
             logger.error(f"Expert brain fallback error: {ex}")
 
     # 3. Local KNOWLEDGE_BASE FAISS search
-    local_e = embedder
-    local_i = index
-    if local_e is None or local_i is None or getattr(local_e, 'broken', False):
+    if index is None:
         return "I am here and I'm listening. Your thoughts are safe in this sanctuary."
 
     try:
-        query_vector = local_e.encode([user_text])
-        D, I = local_i.search(query_vector.astype('float32'), 1)
+        query_vector = embedder.encode([user_text])
+        D, I = index.search(query_vector.astype('float32'), 1)
         match_idx = I[0][0]
 
         # Distance threshold — if match is too far, use a generic response

@@ -3,12 +3,12 @@ from datasets import load_dataset
 import numpy as np
 import faiss
 import os
-import time
-from google import genai
-from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 from api._database import SessionLocal, ExpertBrainData
 
-load_dotenv()
+print("Loading local sentence-transformer embedder (all-MiniLM-L6-v2)...")
+st_model = SentenceTransformer('all-MiniLM-L6-v2')
+print(f"Embedder ready. Dimension: {st_model.get_sentence_embedding_dimension()}")
 
 # 1. Re-assemble the archive from datasets
 print("Re-downloading datasets to match index...")
@@ -46,98 +46,99 @@ if os.path.exists(INDEX_PATH):
     index = faiss.read_index(INDEX_PATH)
     start_idx = index.ntotal
     print(f"Starting from index {start_idx}/{len(expert_archive)}")
+    
+    # Ensure SQL is caught up
+    db = SessionLocal()
+    sql_count = db.query(ExpertBrainData).count()
+    if sql_count < start_idx:
+        print(f"SQL is behind ({sql_count} < {start_idx}). Catching up...")
+        for i in range(sql_count, start_idx):
+            if i % 500 == 0:
+                print(f"SQL Catch-up: {i}/{start_idx}")
+            row = expert_archive.iloc[i]
+            entry = ExpertBrainData(
+                question=row['questionText'],
+                answer=row['answerText'],
+                source="CounselChat/MentalChat",
+                embedding_id=i
+            )
+            db.add(entry)
+        db.commit()
+        print("SQL caught up.")
+    db.close()
 else:
     print("No index found. Starting from scratch.")
     index = None
     start_idx = 0
 
-# 3. Continue embedding
+# 3. Continue embedding with sentence-transformers (no rate limits, 384-dim matches FAISS index)
 if start_idx < len(expert_archive):
-    print(f"Embedding remaining {len(expert_archive) - start_idx} records...")
-    GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    
+    remaining = expert_archive['questionText'].tolist()[start_idx:]
+    print(f"Embedding {len(remaining)} remaining records with sentence-transformers...")
+
+    BATCH_SIZE = 64  # sentence-transformers handles batches efficiently
     new_embeddings = []
-    texts_to_embed = expert_archive['questionText'].tolist()[start_idx:]
-    
-    for i, text in enumerate(texts_to_embed):
-        current_abs_idx = start_idx + i
-        if i % 50 == 0:
-            print(f"Progress: {current_abs_idx}/{len(expert_archive)}")
-        try:
-            response = client.models.embed_content(
-                model='models/gemini-embedding-001',
-                contents=text,
-            )
-            if hasattr(response, 'embeddings'):
-                new_embeddings.append(response.embeddings[0].values)
-            else:
-                new_embeddings.append(response['embedding'])
-        except Exception as e:
-            print(f"Error on index {current_abs_idx}: {e}")
-            if "429" in str(e):
-                print("Rate limit hit. Sleeping for 60s...")
-                time.sleep(60)
-                # Retry once
-                try:
-                    response = client.models.embed_content(model='models/gemini-embedding-001', contents=text)
-                    if hasattr(response, 'embeddings'): new_embeddings.append(response.embeddings[0].values)
-                    else: new_embeddings.append(response['embedding'])
-                    continue
-                except: pass
-            new_embeddings.append([0.0] * 768)
 
-    if new_embeddings:
+    for batch_start in range(0, len(remaining), BATCH_SIZE):
+        batch_texts = remaining[batch_start: batch_start + BATCH_SIZE]
+        batch_vecs = st_model.encode(batch_texts, convert_to_numpy=True).astype('float32')
+        new_embeddings.extend(batch_vecs)
+
+        # Save progress after each batch
+        abs_end_idx = start_idx + batch_start + len(batch_texts) - 1
         new_embeddings_arr = np.array(new_embeddings).astype('float32')
-        # Cast to float16 and back to float32 to match existing index if it was float16
-        # Actually _build_brain.py used float16. 
-        # But IndexFlatL2 expects float32.
-        if index is None:
-            index = faiss.IndexFlatL2(768)
-        
-        index.add(new_embeddings_arr)
-        print("Updated FAISS index.")
 
-# 4. Save updated files
-os.makedirs(EXPERT_DIR, exist_ok=True)
-faiss.write_index(index, INDEX_PATH)
-# We don't save the pkl because of the version issue, but we'll use the df for SQL
-# Actually, the user's pkl is corrupted, so saving a new one might fix it for their environment
+        if index is None:
+            index = faiss.IndexFlatL2(new_embeddings_arr.shape[1])
+        index.add(new_embeddings_arr)
+        faiss.write_index(index, INDEX_PATH)
+
+        # Sync SQL for this batch
+        db = SessionLocal()
+        try:
+            for j, _ in enumerate(batch_vecs):
+                row_idx = start_idx + batch_start + j
+                row = expert_archive.iloc[row_idx]
+                existing = db.query(ExpertBrainData).filter(
+                    ExpertBrainData.embedding_id == row_idx
+                ).first()
+                if not existing:
+                    db.add(ExpertBrainData(
+                        question=row['questionText'],
+                        answer=row['answerText'],
+                        source="CounselChat/MentalChat",
+                        embedding_id=row_idx
+                    ))
+            db.commit()
+            print(f"  Progress: {abs_end_idx + 1}/{len(expert_archive)} records")
+        except Exception as sql_e:
+            print(f"SQL Error: {sql_e}")
+            db.rollback()
+        finally:
+            db.close()
+
+        new_embeddings = []  # Reset for next batch (already added to FAISS)
+
+# 4. Final Save & Metadata
+print("Ensuring metadata consistency...")
 try:
     expert_archive.to_pickle(PKL_PATH)
     print("Saved updated expert_archive.pkl")
 except Exception as e:
-    print(f"Warning: Could not save pkl (likely version mismatch): {e}")
+    print(f"Warning: Could not save pkl: {e}")
 
-# 5. Populate SQL
-print("Populating SQLite database...")
+# Verify final counts
 db = SessionLocal()
-try:
-    # Check current count
-    sql_count = db.query(ExpertBrainData).count()
-    print(f"SQL currently has {sql_count} records. Syncing to {len(expert_archive)}...")
-    
-    # Simple strategy: If empty, populate all. If not, just clear and re-populate to ensure order.
-    # Given the user's situation, a full sync is safest.
-    db.query(ExpertBrainData).delete()
-    db.commit()
-    
-    for i, row in expert_archive.iterrows():
-        if i % 500 == 0:
-            print(f"SQL Progress: {i}/{len(expert_archive)}")
-        entry = ExpertBrainData(
-            question=row['questionText'],
-            answer=row['answerText'],
-            source="CounselChat/MentalChat",
-            embedding_id=i
-        )
-        db.add(entry)
-    db.commit()
-    print("Database sync complete.")
-except Exception as e:
-    print(f"Error populating database: {e}")
-    db.rollback()
-finally:
-    db.close()
+sql_count = db.query(ExpertBrainData).count()
+index_count = index.ntotal if index else 0
+db.close()
 
-print("Success! Transfer resumed and completed.")
+print(f"\nFinal Status:")
+print(f"FAISS Vectors: {index_count}")
+print(f"SQL Records: {sql_count}")
+print(f"Target Total: {len(expert_archive)}")
+
+if index_count == len(expert_archive) and sql_count == len(expert_archive):
+    print("✅ SUCCESS: Expert brain is fully synchronized and populated.")
+else:
+    print("⚠️ INCOMPLETE: Run the script again later to finish remaining records.")

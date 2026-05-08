@@ -125,27 +125,44 @@ When you receive 'Expert Advice' from the local archive, do not quote it verbati
 """
 # --- Sentinel Brain Analysis Layer (The Thinker) ---
 SENTINEL_ANALYSIS_PROMPT = """
-Analyze the user's message in a Kenyan peer-support context. Return ONLY a valid JSON object.
+Analyze the user message below in a Kenyan peer-support context.
+Return ONLY a raw JSON object. Do NOT wrap it in markdown or code fences.
+
 User Message: "{message}"
 
 JSON Schema:
-{
-  "negation_count": int, 
+{{
+  "negation_count": <int: count of negation words like not, never, don't, can't, won't, no>,
   "intent": "social" | "validation" | "support" | "crisis",
-  "keywords": ["list", "of", "fetch", "words"],
-  "sentiment": float (-1.0 to 1.0),
-  "negation_rule_applied": boolean,
-  "cultural_stressor": string | null
-}
+  "keywords": ["2-4 emotional or topic keywords for expert database search"],
+  "sentiment": <float -1.0 to 1.0>,
+  "negation_rule_applied": <boolean>,
+  "cultural_stressor": <string or null>
+}}
 
-Negation Rule: If negation_count is odd, the sentiment is flipped. Example: "I am not happy" -> negation_count: 1, sentiment: -0.8.
+Intent Classification:
+- "social": Greeting, casual chat, sharing daily life, expressing appreciation, positive news.
+- "validation": Venting mild frustration or a hard day, NOT asking for advice.
+- "support": Describing emotional pain, anxiety, loneliness, relationship issues, asking for help.
+- "crisis": Hopelessness, suicidal ideation, self-harm, extreme distress.
+
+Negation Rule: If negation_count is ODD, flip the sentiment sign.
+Examples:
+- "I just had a great lunch" -> intent: social, sentiment: 0.8, negation_count: 0
+- "Today was rough, just venting" -> intent: validation, sentiment: -0.5, negation_count: 0
+- "I am not happy" -> intent: validation, sentiment: -0.8, negation_count: 1, negation_rule_applied: true
+- "I'm not sad, I'm actually great" -> intent: social, sentiment: 0.7, negation_count: 1, negation_rule_applied: true
 """
 
 async def thinker_analyze(message: str) -> Dict[str, Any]:
-    """Uses Gemini to perform semantic analysis of the user input."""
+    """Uses Gemini to semantically analyze user input into structured intent data."""
+    defaults = {
+        "negation_count": 0, "intent": "support", "keywords": [],
+        "sentiment": 0.0, "negation_rule_applied": False, "cultural_stressor": None
+    }
     if not ai_client:
-        return {"negation_count": 0, "intent": "support", "keywords": [], "sentiment": 0.0, "negation_rule_applied": False, "cultural_stressor": None}
-    
+        return defaults
+
     try:
         prompt = SENTINEL_ANALYSIS_PROMPT.format(message=message)
         response = await asyncio.to_thread(
@@ -153,12 +170,18 @@ async def thinker_analyze(message: str) -> Dict[str, Any]:
             model=AI_MODEL_NAME,
             contents=prompt
         )
-        raw_text = response.text.strip().strip("`").replace("json", "").strip()
-        analysis = json.loads(raw_text)
+        raw_text = response.text.strip()
+        # Robust extraction: pull JSON object even if Gemini adds markdown fencing
+        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if not match:
+            logger.warning(f"Thinker returned non-JSON: {raw_text[:100]}")
+            return defaults
+        analysis = json.loads(match.group())
+        logger.info(f"Thinker: intent={analysis.get('intent')} sentiment={analysis.get('sentiment')} negations={analysis.get('negation_count')}")
         return analysis
     except Exception as e:
         logger.error(f"Thinker Analysis Error: {e}")
-        return {"negation_count": 0, "intent": "support", "keywords": [message[:20]], "sentiment": 0.0, "negation_rule_applied": False, "cultural_stressor": None}
+        return defaults
 
 def fetch_expert_advice(keywords: List[str], message: str) -> str:
     """Combines keyword SQL search with FAISS vector search for the best advice."""
@@ -421,11 +444,15 @@ class ConnectionManager:
 
     async def handle_ai_chat(self, session_id: str, message: str, is_nudge: bool = False, depth: float = 0.0):
         """
-        Generates a professional and varied AI response by:
-        1. Analyzing user input into JSON (Intent, Negations, Sentiment, Keywords).
-        2. Fetching relevant expert advice from the database using keywords + vectors.
-        3. Synthesizing a human-like response informed by the analysis.
+        Intent-aware AI response pipeline:
+        1. Thinker analyzes intent (social / validation / support / crisis)
+        2. Routing: social & validation skip expert retrieval entirely
+        3. Support & crisis use full SQL + FAISS expert lookup
+        4. Single clean try/except — memory update & send always happen
         """
+        # Initialize early so it's always defined, even if an exception occurs
+        response_text = None
+
         try:
             # 1. Retrieve Context & Memory
             db = SessionLocal()
@@ -438,46 +465,77 @@ class ConnectionManager:
             history = user_meta.get("history", [])[-8:]
             formatted_history = "\n".join([f"{m['role']}: {m['content']}" for m in history])
 
-            # 2. Thinker Analysis (The Brain)
+            # 2. Thinker Analysis
             analysis = await thinker_analyze(message)
             intent = analysis.get("intent", "support")
             keywords = analysis.get("keywords", [])
             sentiment = analysis.get("sentiment", 0.0)
             negation_count = analysis.get("negation_count", 0)
             cultural_stressor = analysis.get("cultural_stressor")
+            negation_note = "(sentiment FLIPPED — read message as opposite)" if negation_count % 2 == 1 else ""
 
-            # 3. Retrieve Expert Wisdom (Hybrid Fetch)
-            expert_context = fetch_expert_advice(keywords, message)
-
-            # 4. Build Prompt
+            # 3. Intent-Aware Prompt Building
             if is_nudge:
-                prompt = f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\nRecent Chat:\n{formatted_history}\nThe user in {region} has been silent. Ask a gentle, peer-like follow up. Max 1 sentence."
+                prompt = (
+                    f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\n"
+                    f"Recent Chat:\n{formatted_history}\n"
+                    f"The user in {region} has been silent. Ask a gentle, peer-like follow-up. Max 1 sentence."
+                )
+
+            elif intent == "social":
+                # User is just chatting — be a warm friend, NOT a therapist
+                prompt = (
+                    f"{SENTINEL_FINE_TUNE_PROMPT}\n\n"
+                    f"USER PREFERENCES: {long_term_prefs}\n"
+                    f"Recent Chat:\n{formatted_history}\n\n"
+                    f"ROUTING: SOCIAL — The user is sharing their day or making conversation.\n"
+                    f"RULES: Do NOT bring up therapy, trauma, or counseling unprompted. "
+                    f"Be a warm, genuinely curious friend. Ask a follow-up about what they shared. "
+                    f"Max 2 sentences. No lists.\n\n"
+                    f"User in {region}: {message}"
+                )
+
+            elif intent == "validation":
+                # User is venting — reflect back, don't advise
+                prompt = (
+                    f"{SENTINEL_FINE_TUNE_PROMPT}\n\n"
+                    f"USER PREFERENCES: {long_term_prefs}\n"
+                    f"THINKER: Sentiment={sentiment} {negation_note}. Negations={negation_count}.\n"
+                    f"Recent Chat:\n{formatted_history}\n\n"
+                    f"ROUTING: VALIDATION — The user needs to feel heard, not advised.\n"
+                    f"RULES: Use reflective listening ONLY. Mirror their feeling back, "
+                    f"then ask ONE open-ended question. Do NOT give advice. "
+                    f"If negation_count is odd, interpret the FLIPPED meaning correctly. "
+                    f"Max 2 sentences. No lists.\n\n"
+                    f"User in {region}: {message}"
+                )
+
             else:
-                prompt = f"""
-                {SENTINEL_FINE_TUNE_PROMPT}
-                
-                THINKER ANALYSIS:
-                - Intent: {intent}
-                - Sentiment Score: {sentiment}
-                - Negation Count: {negation_count}
-                - Cultural Context: {cultural_stressor if cultural_stressor else "None detected"}
-                
-                USER PREFERENCES (ADHERE TO THESE): {long_term_prefs}
-                EXPERT CONTEXT: {expert_context}
-                
-                Recent Chat Memory:
-                {formatted_history}
-                
-                User in {region}: {message}
-                
-                FINAL INSTRUCTION:
-                Base your response on the Expert Context but keep the tone 'Human' and 'Peer-to-Peer'.
-                If negations were used (e.g., "I am NOT sad"), ensure your response acknowledges that correctly.
-                Max 3 sentences. No bullet points.
-                """
-            
-            # 5. Call AI
-            response_text = None
+                # support or crisis — full expert retrieval
+                expert_context = fetch_expert_advice(keywords, message)
+                crisis_note = ""
+                if intent == "crisis":
+                    contact = REGIONAL_CONTACTS.get(region, "Red Cross: 1199")
+                    crisis_note = f"\n[LOCAL SUPPORT RESOURCE FOR {region}: {contact}]"
+                    expert_context += crisis_note
+
+                prompt = (
+                    f"{SENTINEL_FINE_TUNE_PROMPT}\n\n"
+                    f"THINKER ANALYSIS:\n"
+                    f"- Intent: {intent}\n"
+                    f"- Sentiment: {sentiment} {negation_note}\n"
+                    f"- Negation Count: {negation_count}\n"
+                    f"- Cultural Stressor: {cultural_stressor or 'None'}\n\n"
+                    f"USER PREFERENCES: {long_term_prefs}\n"
+                    f"EXPERT CONTEXT: {expert_context or 'No direct match — respond from empathy.'}\n\n"
+                    f"Recent Chat Memory:\n{formatted_history}\n\n"
+                    f"User in {region}: {message}\n\n"
+                    f"FINAL INSTRUCTION: Draw from Expert Context but keep tone human and peer-to-peer. "
+                    f"If negation_count is odd, address the ACTUAL meaning correctly. "
+                    f"Max 3 sentences. No bullet points."
+                )
+
+            # 4. Call Gemini (with retry on rate limit)
             if ai_client:
                 for i in range(3):
                     try:
@@ -492,54 +550,33 @@ class ConnectionManager:
                         if "429" in str(e):
                             await asyncio.sleep((i + 1) * 3)
                         else:
+                            logger.error(f"Gemini generation error: {e}")
                             break
 
-            # FINAL FALLBACK
-            if not response_text:
-                response_text = get_kenyan_fallback(message)
-
-            # Realistic Processing Delay
-            if depth < 0.7 and not is_nudge:
-                await asyncio.sleep(random.uniform(1.2, 2.5))
-
-            # 6. Update Memory & Send
-            if session_id in self.user_data:
-                self.user_data[session_id]["history"].append({"role": "User", "content": message})
-                self.user_data[session_id]["history"].append({"role": "Sentinel", "content": response_text})
-                self.user_data[session_id]["last_interaction"] = {"query": message, "response": response_text}
-
-            if session_id in self.active_connections:
-                await self.active_connections[session_id].send_json({
-                    "type": "peer",
-                    "content": f"[Sentinel]: {response_text}",
-                    "timestamp": str(datetime.datetime.now())
-                })
         except Exception as e:
-            logger.error(f"AI Error: {e}")
+            logger.error(f"handle_ai_chat pipeline error: {e}")
 
-            # FINAL FALLBACK (If level 3 fails or wasn't triggered)
-            if not response_text:
-                response_text = get_kenyan_fallback(message)
+        # Always send a response — fallback if AI failed
+        if not response_text:
+            response_text = get_kenyan_fallback(message if message else "hello")
 
-            # ── PULSE LOGIC METER: Human Processing Delay ─────────────────────
-            if depth < 0.7 and not is_nudge:
-                await asyncio.sleep(random.uniform(1.2, 2.5))
+        # Human-like processing delay
+        if depth < 0.7 and not is_nudge:
+            await asyncio.sleep(random.uniform(1.2, 2.5))
 
-            # 6. Update Memory & Send
-            if session_id in self.user_data:
-                self.user_data[session_id]["history"].append({"role": "User", "content": message})
-                self.user_data[session_id]["history"].append({"role": "Sentinel", "content": response_text})
-                # Store last interaction for feedback
-                self.user_data[session_id]["last_interaction"] = {"query": message, "response": response_text}
+        # Update in-memory history
+        if session_id in self.user_data:
+            self.user_data[session_id]["history"].append({"role": "User", "content": message})
+            self.user_data[session_id]["history"].append({"role": "Sentinel", "content": response_text})
+            self.user_data[session_id]["last_interaction"] = {"query": message, "response": response_text}
 
-            if session_id in self.active_connections:
-                await self.active_connections[session_id].send_json({
-                    "type": "peer",
-                    "content": f"[Sentinel]: {response_text}",
-                    "timestamp": str(datetime.datetime.now())
-                })
-        except Exception as e:
-            logger.error(f"AI Error: {e}")
+        # Send to client
+        if session_id in self.active_connections:
+            await self.active_connections[session_id].send_json({
+                "type": "peer",
+                "content": f"[Sentinel]: {response_text}",
+                "timestamp": str(datetime.datetime.now())
+            })
 
     async def relay_message(self, sender_id: str, message: str):
         # Track depth for priority matching or AI context
