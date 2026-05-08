@@ -17,7 +17,6 @@ import faiss
 import geoip2.database
 from google import genai
 from dotenv import load_dotenv
-from profanity_check import predict
 
 from api._database import (
     create_user_profile, 
@@ -235,21 +234,29 @@ async def get_user_geo(ip: str):
         logger.error(f"Local GeoIP lookup error: {e}")
         return "Nairobi", "Nairobi", "Kenya"
 
+# Regex-based profanity filter (replaces sklearn alt-profanity-check — saves ~80MB RAM)
+# Covers common English + Kiswahili offensive terms in Kenyan context
+_PROFANITY_RE = re.compile(
+    r'\b(fuck|shit|bitch|asshole|cunt|bastard|motherfucker|nigga|whore|slut|puta|'
+    r'malaya|mbwa|pumbavu|mjinga|meffi|takataka|wewe ni)\b',
+    re.IGNORECASE
+)
+
 def is_safe_local(text: str) -> tuple[bool, str]:
     """
-    Returns (is_safe, reason). 
+    Returns (is_safe, reason).
     Checks for PII (Personal Identifiable Info) and Malicious Intent locally.
+    Uses regex-based checks only — no sklearn/ML dependencies.
     """
     # 1. Check for Doxing (Phone numbers)
     if re.search(r"(\+254|07|01)\d{8}", text):
         return False, "Privacy Alert: For your safety, do not share phone numbers yet."
 
-    # 2. Check for Profanity/Aggression
-    # predict() returns 1 if offensive, 0 if safe
-    if predict([text])[0] == 1:
+    # 2. Check for Profanity/Aggression (regex-based, no ML model needed)
+    if _PROFANITY_RE.search(text):
         return False, "System Alert: Let's keep our language healing and safe."
 
-    # 3. Check for specific "Violence" keywords (Manual Override)
+    # 3. Check for specific Violence keywords
     danger_words = ["kill", "hurt", "attack", "stab", "blood", "die"]
     if any(word in text.lower() for word in danger_words):
         return False, "Safety Alert: It sounds like you're feeling a lot of anger right now. That's a heavy load to carry. Before you act on those feelings, would you like to speak with a professional at the Red Cross?"
