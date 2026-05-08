@@ -9,25 +9,24 @@ logger = logging.getLogger("e-motions-fallback")
 
 class LocalEmbedder:
     """
-    Local sentence-transformer embedder.
-    - Model: all-MiniLM-L6-v2
-    - Dimension: 384 (matches the existing FAISS index)
-    - No API key, no rate limits, runs fully offline.
+    Lazy-loading sentence-transformer embedder.
+    The model is NOT loaded at import time — it loads on the first encode() call.
+    This saves ~200MB of RAM at startup, keeping Render free-tier within limits.
+    Model: all-MiniLM-L6-v2  |  Dimension: 384  |  No API rate limits.
     """
     def __init__(self):
-        try:
+        self._model = None  # Deferred until first use
+
+    def _load(self):
+        if self._model is None:
             from sentence_transformers import SentenceTransformer
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("LocalEmbedder ready — sentence-transformers all-MiniLM-L6-v2 (384-dim).")
-        except Exception as e:
-            logger.error(f"Failed to load LocalEmbedder: {e}")
-            self.model = None
+            self._model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("LocalEmbedder loaded on first use (384-dim).")
+        return self._model
 
     def encode(self, texts):
-        if not self.model:
-            return np.zeros((len(texts), 384), dtype='float32')
         try:
-            return self.model.encode(texts, convert_to_numpy=True).astype('float32')
+            return self._load().encode(texts, convert_to_numpy=True).astype('float32')
         except Exception as e:
             logger.error(f"LocalEmbedder encode error: {e}")
             return np.zeros((len(texts), 384), dtype='float32')
@@ -47,7 +46,6 @@ REGIONAL_CONTACTS = {
 }
 
 # --- Sentiment Guard ---
-# If the message is positive, never match it to crisis responses
 POSITIVE_SIGNALS = [
     "happy", "great", "good", "excited", "amazing", "blessed",
     "grateful", "fine", "okay", "chillin", "vibing",
@@ -82,79 +80,71 @@ KNOWLEDGE_BASE = [
     {"input": "Everything is falling apart", "reply": "When everything feels chaotic, it's hard to find a place to stand. Let's take it one small breath at a time. What's the very next thing in front of you?"}
 ]
 
-# Build the local Vector Index from KNOWLEDGE_BASE
-if embedder:
-    try:
-        sentences = [item["input"] for item in KNOWLEDGE_BASE]
-        encoded_data = embedder.encode(sentences)
-        index = faiss.IndexFlatL2(encoded_data.shape[1])
-        index.add(encoded_data.astype('float32'))
-    except Exception as e:
-        logger.error(f"Failed to build faiss index: {e}")
-        index = None
-else:
-    index = None
-
 # --- Expert Brain (CounselChat + MentalChat16K) ---
-# Loaded by main.py at startup — if available, used instead of tiny local index
+# Loaded by index.py at startup — if available, used for semantic search
 _expert_index = None
 _expert_archive = None
 
 def load_expert_brain_refs(exp_index, exp_archive):
-    """Called from main.py to share the expert brain references into fallback."""
+    """Called from index.py to share the expert brain references into fallback."""
     global _expert_index, _expert_archive
     _expert_index = exp_index
     _expert_archive = exp_archive
 
+
+def _kb_keyword_match(user_lower: str) -> str | None:
+    """
+    Lightweight keyword match against the 10-entry local KNOWLEDGE_BASE.
+    No FAISS index needed for a dataset this small — avoids startup RAM cost.
+    """
+    for item in KNOWLEDGE_BASE:
+        key_words = [w for w in item["input"].lower().split() if len(w) > 3]
+        hits = sum(1 for w in key_words if w in user_lower)
+        if hits >= 2:
+            return item["reply"]
+    return None
+
+
 def get_kenyan_fallback(user_text: str) -> str:
     """
-    Intent-aware fallback:
-    1. Positive sentiment → return uplifting response (never a crisis reply)
-    2. Use Expert Brain (CounselChat) if available
-    3. Fall back to local KNOWLEDGE_BASE FAISS search
+    Intent-aware fallback (used only when Gemini is unavailable):
+    1. Positive sentiment (no negation) → return uplifting response
+    2. Expert Brain (CounselChat FAISS) if loaded → semantic search
+    3. Local KNOWLEDGE_BASE keyword match → small curated replies
+    4. Generic holding response
     """
     user_lower = user_text.lower()
 
-    # 1. Positivity Guard — short-circuit before any FAISS search
-    # Only fire if there are NO negation words in the message (prevents "not happy" → positive reply)
+    # 1. Positivity Guard — skip if negation words present
+    # Prevents "not happy" from triggering a positive response
     _negations = ["not ", "never ", "don't ", "can't ", "won't ", "isn't ", "aren't ", "wasn't ", "no "]
     _has_negation = any(neg in user_lower for neg in _negations)
     if not _has_negation and any(word in user_lower for word in POSITIVE_SIGNALS):
         import random
         return random.choice(POSITIVE_RESPONSES)
 
-    # 2. Try Expert Brain first (CounselChat + MentalChat16K)
+    # 2. Try Expert Brain (CounselChat + MentalChat16K) — FAISS semantic search
     if _expert_index is not None and _expert_archive is not None:
         try:
             query_vec = embedder.encode([user_text])
             D, I = _expert_index.search(query_vec.astype('float32'), 1)
             match_idx = I[0][0]
             if match_idx != -1 and match_idx < len(_expert_archive):
-                raw = _expert_archive.iloc[match_idx]['answerText']
-                raw_str = str(raw).strip()
+                raw_str = str(_expert_archive.iloc[match_idx]['answerText']).strip()
                 if len(raw_str) > 280:
                     return raw_str[:280] + "..."
                 return raw_str
         except Exception as ex:
             logger.error(f"Expert brain fallback error: {ex}")
 
-    # 3. Local KNOWLEDGE_BASE FAISS search
-    if index is None:
-        return "I am here and I'm listening. Your thoughts are safe in this sanctuary."
+    # 3. Local KNOWLEDGE_BASE keyword match (no FAISS, no model load)
+    kb_reply = _kb_keyword_match(user_lower)
+    if kb_reply:
+        return kb_reply
 
-    try:
-        query_vector = embedder.encode([user_text])
-        D, I = index.search(query_vector.astype('float32'), 1)
-        match_idx = I[0][0]
+    # 4. Generic holding response
+    return "I hear you. Take your time — what's on your mind right now?"
 
-        # Distance threshold — if match is too far, use a generic response
-        if match_idx == -1 or match_idx >= len(KNOWLEDGE_BASE) or D[0][0] > 1.5:
-            return "I hear you. Take your time — what's on your mind right now?"
-
-        return KNOWLEDGE_BASE[match_idx]["reply"]
-    except Exception as ex:
-        logger.error(f"Fallback search error: {ex}")
-        return "The sanctuary is a quiet space for your thoughts. I'm with you."
 
 def get_regional_grounding(region: str) -> str:
     """Provides local context for the AI."""
