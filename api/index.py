@@ -119,6 +119,10 @@ TONE SPECIFICATIONS:
 - Emotion & Expression: Freely use appropriate and fitting emojis naturally in your responses to show your emotional reaction and warmth (e.g., 💛, 😊, 😂). Let your personality shine, but keep it natural and avoid cringe roleplay actions.
 - Contextual Awareness: Always remember the user's location to make the support feel local.
 
+CRISIS & SAFETY PROTOCOL:
+- Self-Harm & Violence: If the user expresses a desire to die, kill themselves, or harm someone else, validate their immense pain deeply, but immediately provide the emergency support number provided in your context.
+- Domestic Violence: If the user indirectly or directly reports domestic violence or abuse (e.g., hitting, abusive partner), advise them to make the call to the emergency number in silence to ensure their safety. Emphasize that they are not alone.
+
 DATA USAGE:
 When you receive 'Expert Advice', weave it naturally into your supportive message. Do not quote it verbatim.
 """
@@ -161,10 +165,11 @@ def thinker_analyze(message: str) -> Dict[str, Any]:
     """
     msg = message.lower().strip()
     
-    # Crisis keywords
-    crisis_words = ["suicide", "kill myself", "end my life", "want to die", "self harm", "hurt myself", "hopeless", "can't go on"]
-    if any(w in msg for w in crisis_words):
-        return {"intent": "crisis", "keywords": ["crisis", "self-harm"], "sentiment": -1.0, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
+    # Crisis / Domestic Violence keywords
+    msg_lower = msg.lower()
+    crisis_words = ["suicide", "kill myself", "end my life", "want to die", "self harm", "hurt myself", "hopeless", "can't go on", "kill someone", "beating me", "hitting me", "abusive", "hit me", "domestic violence", "afraid of my partner", "he hurts me", "she hurts me"]
+    if any(w in msg_lower for w in crisis_words):
+        return {"intent": "crisis", "keywords": ["crisis", "safety"], "sentiment": -1.0, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 
     # Social / greeting
     social_words = ["hi", "hello", "hey", "hii", "sup", "hola", "niaje", "mambo", "sema", "habari", "good morning", "good evening", "what's up", "how are you", "i'm good", "im good", "doing great", "happy", "excited", "lol", "haha", "😂", "😊"]
@@ -281,11 +286,9 @@ def is_safe_local(text: str) -> tuple[bool, str]:
     if _PROFANITY_RE.search(text):
         return False, "System Alert: Let's keep our language healing and safe."
 
-    # 3. Check for specific Violence keywords
-    danger_words = ["kill", "hurt", "attack", "stab", "blood", "die"]
-    if any(word in text.lower() for word in danger_words):
-        return False, "Safety Alert: It sounds like you're feeling a lot of anger right now. That's a heavy load to carry. Before you act on those feelings, would you like to speak with a professional at the Red Cross?"
-
+    # Note: Violence and crisis are intentionally NOT blocked here so Groq can respond empathetically
+    # and provide emergency numbers via the crisis protocol.
+    
     return True, ""
 
 
