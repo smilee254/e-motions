@@ -168,7 +168,7 @@ async def thinker_analyze(message: str) -> Dict[str, Any]:
             chat_completion = await asyncio.to_thread(
                 groq_client.chat.completions.create,
                 messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-oss-20b", # fast model for JSON analysis
+                model="llama-3.1-8b-instant", # fast model for JSON analysis
                 temperature=0.0,
                 response_format={"type": "json_object"}
             )
@@ -579,7 +579,7 @@ class ConnectionManager:
                         chat_completion = await asyncio.to_thread(
                             groq_client.chat.completions.create,
                             messages=[{"role": "user", "content": prompt}],
-                            model="openai/gpt-oss-120b",
+                            model="llama-3.3-70b-versatile",
                             temperature=0.7,
                             max_tokens=500
                         )
