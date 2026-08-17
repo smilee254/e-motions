@@ -153,40 +153,32 @@ Examples:
 - "I'm not sad, I'm actually great" -> intent: social, sentiment: 0.7, negation_count: 1, negation_rule_applied: true
 """
 
-async def thinker_analyze(message: str) -> Dict[str, Any]:
-    """Uses Gemini to semantically analyze user input into structured intent data."""
-    defaults = {
-        "negation_count": 0, "intent": "support", "keywords": [],
-        "sentiment": 0.0, "negation_rule_applied": False, "cultural_stressor": None
-    }
-    if not ai_client:
-        return defaults
 
-    try:
-        prompt = SENTINEL_ANALYSIS_PROMPT.format(message=message)
-        if groq_client:
-            chat_completion = await asyncio.to_thread(
-                groq_client.chat.completions.create,
-                messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-oss-20b", # fast model for JSON analysis
-                temperature=0.0,
-                response_format={"type": "json_object"}
-            )
-            raw_text = chat_completion.choices[0].message.content.strip()
-        else:
-            return defaults
-            
-        # Robust extraction: pull JSON object even if the model adds markdown fencing
-        match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-        if not match:
-            logger.warning(f"Thinker returned non-JSON: {raw_text[:100]}")
-            return defaults
-        analysis = json.loads(match.group())
-        logger.info(f"Thinker: intent={analysis.get('intent')} sentiment={analysis.get('sentiment')} negations={analysis.get('negation_count')}")
-        return analysis
-    except Exception as e:
-        logger.error(f"Thinker Analysis Error: {e}")
-        return defaults
+def thinker_analyze(message: str) -> Dict[str, Any]:
+    """
+    Local lightweight intent analysis — no API call needed.
+    Saves one Groq call per message (cuts rate limit usage in half).
+    """
+    msg = message.lower().strip()
+    
+    # Crisis keywords
+    crisis_words = ["suicide", "kill myself", "end my life", "want to die", "self harm", "hurt myself", "hopeless", "can't go on"]
+    if any(w in msg for w in crisis_words):
+        return {"intent": "crisis", "keywords": ["crisis", "self-harm"], "sentiment": -1.0, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
+
+    # Social / greeting
+    social_words = ["hi", "hello", "hey", "hii", "sup", "hola", "niaje", "mambo", "sema", "habari", "good morning", "good evening", "what's up", "how are you", "i'm good", "im good", "doing great", "happy", "excited", "lol", "haha", "😂", "😊"]
+    if any(w in msg for w in social_words) and len(msg) < 80:
+        return {"intent": "social", "keywords": [], "sentiment": 0.7, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
+
+    # Validation / venting
+    validation_words = ["just venting", "rough day", "bad day", "frustrated", "annoyed", "tired", "exhausted", "ugh", "stressed", "overwhelmed", "just need to talk"]
+    if any(w in msg for w in validation_words):
+        return {"intent": "validation", "keywords": msg.split()[:4], "sentiment": -0.5, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
+
+    # Default: support (full expert pipeline)
+    words = [w for w in msg.split() if len(w) > 4][:4]
+    return {"intent": "support", "keywords": words, "sentiment": -0.3, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 
 def _embed_query(message: str) -> list:
     """Embed a message via Gemini API (HTTP call, no local ML model)."""
@@ -504,7 +496,7 @@ class ConnectionManager:
             formatted_history = "\n".join([f"{m['role']}: {m['content']}" for m in history])
 
             # 2. Thinker Analysis
-            analysis = await thinker_analyze(message)
+            analysis = thinker_analyze(message)
             intent = analysis.get("intent", "support")
             keywords = analysis.get("keywords", [])
             sentiment = analysis.get("sentiment", 0.0)
