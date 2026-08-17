@@ -161,6 +161,13 @@ function initSanctuary(existingSocket) {
     // Reuse the socket that was opened during the handshake check
     const socket = existingSocket;
 
+    // Heartbeat to prevent Render from dropping idle connections (Render timeout is ~100s)
+    setInterval(() => {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "ping" }));
+        }
+    }, 45000);
+
     let safeExitContact = "1199"; // Default Red Cross
     let currentMode = "waiting";  // 'waiting' (AI) or 'paired' (Human)
     let inactivityTimer;

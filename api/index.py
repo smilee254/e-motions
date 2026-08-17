@@ -659,11 +659,15 @@ async def websocket_endpoint(websocket: WebSocket):
             # Receive text from user
             data = await websocket.receive_text()
             
-            # Handle JSON commands (Feedback)
+            # Handle JSON commands (Feedback, Ping)
             if data.startswith("{"):
                 try:
                     import json
                     cmd = json.loads(data)
+                    
+                    if cmd.get("type") == "ping":
+                        continue # Silently keep connection alive
+                        
                     if cmd.get("type") == "feedback":
                         score = cmd.get("score", 0)
                         correction = cmd.get("correction")
