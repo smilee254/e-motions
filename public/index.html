@@ -4,400 +4,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-motions | Silent Sanctuary</title>
-    <meta name="description" content="e-motions — a safe, anonymous sanctuary for mental health peer support. You are never alone here.">
+    <title>e-motions | Karibu</title>
+    <meta name="description" content="e-motions — a safe, warm space for mental health peer support. You are never alone here.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400;1,500&family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-
-    <!-- Three.js r128 (global) for Molecule background -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-
-    <!-- Simplex-noise GLSL (read by Molecule.setupShader) -->
-    <script id="webgl-noise" type="x-shader/x-vertex">
-vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
-vec4 permute(vec4 x){return mod289(((x*34.0)+10.0)*x);}
-vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
-float snoise(vec3 v){
-  const vec2 C=vec2(1.0/6.0,1.0/3.0);
-  const vec4 D=vec4(0.0,0.5,1.0,2.0);
-  vec3 i=floor(v+dot(v,C.yyy));
-  vec3 x0=v-i+dot(i,C.xxx);
-  vec3 g=step(x0.yzx,x0.xyz);
-  vec3 l=1.0-g;
-  vec3 i1=min(g.xyz,l.zxy);
-  vec3 i2=max(g.xyz,l.zxy);
-  vec3 x1=x0-i1+C.xxx;
-  vec3 x2=x0-i2+C.yyy;
-  vec3 x3=x0-D.yyy;
-  i=mod289(i);
-  vec4 p=permute(permute(permute(
-    i.z+vec4(0.0,i1.z,i2.z,1.0))
-    +i.y+vec4(0.0,i1.y,i2.y,1.0))
-    +i.x+vec4(0.0,i1.x,i2.x,1.0));
-  float n_=0.142857142857;
-  vec3 ns=n_*D.wyz-D.xzx;
-  vec4 j=p-49.0*floor(p*ns.z*ns.z);
-  vec4 x_=floor(j*ns.z);
-  vec4 y_=floor(j-7.0*x_);
-  vec4 x=x_*ns.x+ns.yyyy;
-  vec4 y=y_*ns.x+ns.yyyy;
-  vec4 h=1.0-abs(x)-abs(y);
-  vec4 b0=vec4(x.xy,y.xy);
-  vec4 b1=vec4(x.zw,y.zw);
-  vec4 s0=floor(b0)*2.0+1.0;
-  vec4 s1=floor(b1)*2.0+1.0;
-  vec4 sh=-step(h,vec4(0.0));
-  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
-  vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-  vec3 p0=vec3(a0.xy,h.x);
-  vec3 p1=vec3(a0.zw,h.y);
-  vec3 p2=vec3(a1.xy,h.z);
-  vec3 p3=vec3(a1.zw,h.w);
-  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
-  p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
-  vec4 m=max(0.5-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
-  m=m*m;
-  return 105.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
-}
-    </script>
 </head>
 
 <body>
-    <!-- Particle Background Canvas (always live behind everything) -->
-    <canvas id="c"></canvas>
+    <!-- Ambient Organic Blobs for Visual Appeal -->
+    <div class="ambient-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
 
-    <!-- 30% brightness reduction overlay -->
-    <div id="bg-dimmer"></div>
-
-    <!-- Ambient Glow Corners -->
-    <div class="glow-corner gc1"></div>
-    <div class="glow-corner gc2"></div>
-
-    <!-- Persistent SOS Bridge (Always Visible) -->
-    <button id="sos-btn" aria-label="Open emergency contacts" class="global-sos">SOS</button>
+    <!-- Theme Toggle -->
+    <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle Dark/Light Theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </button>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!--  GATEWAY LANDING — shown first, revealed by curtain -->
+    <!--  GATEWAY LANDING — Warm and Grounded                 -->
     <!-- ═══════════════════════════════════════════════════ -->
     <section class="showcase" id="showcase">
-        <!-- Left curtain panel -->
-        <div id="curtain-l" class="curtain"></div>
-        <!-- Right curtain panel -->
-        <div id="curtain-r" class="curtain"></div>
-
-        <!-- Landing content (centre stage) -->
         <div class="gateway-content" id="gateway-content">
+            <div class="header-illustration">
+                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 5.35786 8.35786 2 12.5 2C16.6421 2 20 5.35786 20 9.5C20 15.5 12 21.5 12 21.5Z" fill="var(--accent-terra)" fill-opacity="0.3"/>
+                    <path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 7.6975 5.63351 6.04877 6.67804 4.75C8.0315 7.15 10 9 12 9C14 9 15.9685 7.15 17.322 4.75C18.3665 6.04877 19 7.6975 19 9.5C19 15.5 12 21.5 12 21.5Z" fill="var(--accent-sage)" fill-opacity="0.6"/>
+                </svg>
+            </div>
 
-            <div class="gateway-wordmark">e-motions</div>
-
+            <h1 class="gateway-wordmark">Karibu, you are safe here.</h1>
             <p class="gateway-tagline">
-                In recent years, there has been a noticeable rise in mental health<br>
-                challenges that lead to suicides or GBV.<br>
-                <strong>e-motions</strong> is built to ensure that you are never alone.
+                Life can feel heavy sometimes. <strong>e-motions</strong> is a calm, quiet space built for Kenyans to share, listen, and find peer support. We're glad you found us.
             </p>
 
-            <!-- ─── ESSENTIAL TRIO (always visible) ─────────────────────── -->
             <div class="safety-trio" role="list" aria-label="Essential safety notices">
                 <div class="trio-pill" role="listitem">
-                    <span class="trio-icon">🧠</span>
-                    <span>Sentinel is an <strong>AI peer</strong>, not a medical professional.</span>
+                    <span class="trio-icon">🌱</span>
+                    <span>Hi, I'm <strong>Sentinel</strong> (but my friends call me Senti 😂). I'm a friendly AI listener, not a medical doctor.</span>
                 </div>
                 <div class="trio-pill trio-pill--crisis" role="listitem">
-                    <span class="trio-icon">🆘</span>
-                    <span>In an <strong>immediate crisis</strong>, tap the SOS button first — do not wait for chat.</span>
+                    <span class="trio-icon">💛</span>
+                    <span>If things feel too dark, tap the <strong>Emergency Connect</strong> button first.</span>
                 </div>
                 <div class="trio-pill" role="listitem">
                     <span class="trio-icon">🔒</span>
-                    <span><strong>No names. No tracking.</strong> Just anonymous peer support.</span>
+                    <span><strong>Total privacy.</strong> No names, no tracking. Just honest sharing.</span>
                 </div>
             </div>
 
-            <!-- ─── CTA ROW ───────────────────────────────────────────────── -->
             <div class="gateway-cta-row">
                 <button class="gateway-btn" id="welcome-btn" aria-label="Enter the sanctuary">
-                    Welcome to e-motions
+                    Enter the Sanctuary
                 </button>
-                <button class="manual-btn" id="manual-btn" aria-label="Read the Sanctuary Manual">
-                    Read the Sanctuary Manual
+                <button class="manual-btn" id="manual-btn" aria-label="Read our Community Guide">
+                    Read our Community Guide
                 </button>
             </div>
-
-            <div class="dev-tag">dev by t-tech</div>
         </div>
     </section>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!--  SANCTUARY MANUAL MODAL                                         -->
+    <!--  COMMUNITY GUIDE MODAL                                          -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div id="manual-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
-        <div class="modal-glass">
-
-            <!-- Header -->
+        <div class="modal-paper">
             <div class="modal-header">
-                <h2 id="modal-title">The Sanctuary Manual</h2>
-                <button class="modal-close" id="modal-close" aria-label="Close manual">✕</button>
+                <h2 id="modal-title">Our Community Guide</h2>
+                <button class="modal-close" id="modal-close" aria-label="Close guide">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
             </div>
-
-            <!-- Scrollable body -->
             <div class="modal-body">
-
-                <!-- § 1 Clinical boundary -->
                 <div class="manual-section">
-                    <h3><span class="msec-icon">🧠</span> Not a Doctor</h3>
-                    <p>e-motions is an <strong>AI-powered peer support sanctuary</strong> and a P2P connection hub. Sentinel is a compassionate thinker backed by expert counselling data — but it is <em>not</em> a licensed psychiatrist, doctor, or emergency medical service. Nothing said in this sanctuary replaces professional clinical care.</p>
+                    <h3><span class="msec-icon">🌱</span> A Safe Space, Not a Clinic</h3>
+                    <p>e-motions is a warm space for peer connection. Sentinel, our AI guide, is here to listen and share wisdom, but it is <em>not</em> a substitute for professional therapy or medical care.</p>
                 </div>
-
-                <!-- § 2 SOS protocol -->
                 <div class="manual-section manual-section--crisis" id="sos-contacts-anchor">
-                    <h3><span class="msec-icon">🆘</span> SOS Protocol — Immediate Danger</h3>
-                    <p>If you are in <strong>immediate danger of self-harm, suicide, or are currently experiencing a violent GBV situation</strong>, do not wait for a chat response. Use the <strong>SOS button</strong> in the top-right corner to access verified Kenyan emergency hotlines instantly.</p>
-
-                    <ul class="emergency-contacts" aria-label="Kenyan emergency contacts">
+                    <h3><span class="msec-icon">💛</span> Emergency Support</h3>
+                    <p>If you are in immediate danger, feeling overwhelmed, or experiencing abuse, please reach out to these incredible human beings who are waiting to help you right now.</p>
+                    <ul class="emergency-contacts">
                         <li>
-                            <span class="ec-badge ec-badge--red">SOS</span>
+                            <span class="ec-badge ec-badge--red">24/7 Support</span>
                             <span class="ec-detail">
                                 <strong>Kenya Red Cross</strong>
                                 <a href="tel:1199">1199</a>
-                                <em>24 / 7 — Mental health &amp; crisis support</em>
                             </span>
                         </li>
                         <li>
-                            <span class="ec-badge ec-badge--purple">GBV</span>
+                            <span class="ec-badge ec-badge--purple">GBV Crisis</span>
                             <span class="ec-detail">
                                 <strong>Gender Violence Recovery Centre</strong>
                                 <a href="tel:1195">1195</a>
-                                <em>24 / 7 — GBV survivors hotline (free)</em>
-                            </span>
-                        </li>
-                        <li>
-                            <span class="ec-badge ec-badge--blue">BEFRI</span>
-                            <span class="ec-detail">
-                                <strong>Befrienders Kenya</strong>
-                                <a href="tel:0800723253">0800 723 253</a>
-                                <em>Suicide prevention — free, confidential</em>
-                            </span>
-                        </li>
-                        <li>
-                            <span class="ec-badge ec-badge--green">KAPC</span>
-                            <span class="ec-detail">
-                                <strong>Kenya Association of Professional Counsellors</strong>
-                                <a href="tel:0722178177">0722 178 177</a>
-                                <em>Professional counsellor referral</em>
-                            </span>
-                        </li>
-                        <li>
-                            <span class="ec-badge ec-badge--orange">EMERG</span>
-                            <span class="ec-detail">
-                                <strong>National Emergency</strong>
-                                <a href="tel:999">999</a> / <a href="tel:112">112</a>
-                                <em>Police / Ambulance / Fire</em>
-                            </span>
-                        </li>
-                        <li>
-                            <span class="ec-badge ec-badge--teal">MTRH</span>
-                            <span class="ec-detail">
-                                <strong>Moi Teaching &amp; Referral Hospital (Rift Valley)</strong>
-                                <a href="tel:0532033041">053 2033041</a>
-                                <em>Psychiatric services — Eldoret</em>
                             </span>
                         </li>
                     </ul>
                 </div>
-
-                <!-- § 3 Anonymity oath -->
                 <div class="manual-section">
-                    <h3><span class="msec-icon">🔒</span> Anonymity &amp; Privacy Oath</h3>
-                    <p>To keep the sanctuary safe, <strong>do not share your real name, phone number, or home address</strong> in P2P lobbies. While e-motions is architected for privacy, your safety is a shared responsibility. Violations are flagged by our Safety Shield and reduce your trust score.</p>
+                    <h3><span class="msec-icon">🤝</span> Be Kind, Always</h3>
+                    <p>We protect this space fiercely. Kindness is mandatory. Hate, bullying, or deliberately hurting others will result in an immediate ban. We're here to hold each other up.</p>
                 </div>
-
-                <!-- § 4 Conduct -->
-                <div class="manual-section">
-                    <h3><span class="msec-icon">🛡️</span> The Ghost Vibe — P2P Conduct Rules</h3>
-                    <p>Hate speech, bullying, sexual harassment, or deliberate triggering of vulnerable peers will result in an <strong>immediate and permanent ban</strong> from the sanctuary. This is a space for healing, not harm. All conduct is scored in real-time by the Safety Shield.</p>
-                </div>
-
-                <!-- § 5 Geolocation -->
-                <div class="manual-section">
-                    <h3><span class="msec-icon">📍</span> Geolocation Disclosure</h3>
-                    <p>We use your <strong>IP address</strong> to place you in a regional Safe Zone (e.g., Ruiru, Kiambu). This lookup runs locally on our server using an offline database — no third-party geolocation APIs are called. We do <em>not</em> track your precise GPS coordinates, store your movement history, or share location data with any external party.</p>
-                </div>
-
-                <!-- § 6 AI hallucination -->
-                <div class="manual-section">
-                    <h3><span class="msec-icon">⚠️</span> AI Behaviour Disclosure</h3>
-                    <p>Sentinel thinks by processing patterns from millions of expert counselling conversations (CounselChat, MentalChat16K, KAPC guidelines). Despite this, it can occasionally surface <strong>inaccurate, incomplete, or contextually unexpected information</strong>. Always apply your own judgment — and if something feels wrong, use the SOS resources above.</p>
-                </div>
-
-            </div><!-- /modal-body -->
-
-            <div class="modal-footer">
-                <p>e-motions is built in Kenya, for Kenya. <strong>You are never alone.</strong></p>
-                <button class="gateway-btn modal-accept-btn" id="modal-accept">I understand — take me in</button>
             </div>
-
+            <div class="modal-footer">
+                <p>Built with love in Kenya. <strong>Tuko pamoja.</strong></p>
+                <button class="gateway-btn modal-accept-btn" id="modal-accept">I'm ready to enter</button>
+            </div>
         </div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════ -->
-    <!--  CHAT SANCTUARY — hidden until curtain opens        -->
+    <!--  CHAT SANCTUARY                                     -->
     <!-- ═══════════════════════════════════════════════════ -->
     <div id="sanctuary-root" aria-hidden="true">
-        <!-- Persistent SOS Bridge -->
         <nav class="top-nav">
+            <div class="nav-left">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" stroke-width="2"><path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 5.35786 8.35786 2 12.5 2C16.6421 2 20 5.35786 20 9.5C20 15.5 12 21.5 12 21.5Z"/></svg>
+                <span class="brand-text">e-motions</span>
+            </div>
+            
             <div class="status-indicator">
                 <span id="status-dot"></span>
-                <span id="status-text">Connecting...</span>
+                <span id="status-text">Finding your space...</span>
             </div>
+
+            <button id="sos-btn" aria-label="Open emergency contacts">Emergency Connect</button>
         </nav>
 
-        <!-- The Responding Diary Feed -->
         <main id="diary-feed">
-            <div class="system-note">Welcome. Your words stay here.</div>
+            <div class="system-note">This is your private diary. Share whatever is on your mind today.</div>
         </main>
 
-        <!-- Input Area -->
         <footer class="input-container">
             <div class="logic-meter" id="logic-meter"></div>
-            <textarea id="entry-input" placeholder="Type your truth..." rows="1"></textarea>
+            <textarea id="entry-input" placeholder="Type your thoughts here..." rows="1"></textarea>
             <button id="send-btn" aria-label="Send message">
-                <svg viewBox="0 0 24 24" width="24" height="24">
-                    <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
             </button>
         </footer>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!--  MOLECULE PARTICLE BACKGROUND (always running)      -->
-    <!-- ═══════════════════════════════════════════════════ -->
-    <script>
-        class World {
-            constructor() {
-                this.build();
-                window.addEventListener('resize', this.resize.bind(this));
-                this.animate = this.animate.bind(this);
-                this.animate();
-            }
-
-            build() {
-                this.scene = new THREE.Scene();
-                this.camera = new THREE.PerspectiveCamera(
-                    75,
-                    window.innerWidth / window.innerHeight,
-                    0.1,
-                    1000
-                );
-                this.camera.position.z = 3;
-
-                // Reuse the existing fixed canvas so no extra DOM element is added
-                const canvas = document.getElementById('c');
-                this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-                this.renderer.setPixelRatio(window.devicePixelRatio);
-                this.renderer.setSize(window.innerWidth, window.innerHeight);
-
-                this.molecule = new Molecule();
-                this.scene.add(this.molecule);
-            }
-
-            resize() {
-                const w = window.innerWidth;
-                const h = window.innerHeight;
-                this.camera.aspect = w / h;
-                this.camera.updateProjectionMatrix();
-                this.renderer.setSize(w, h);
-            }
-
-            animate() {
-                requestAnimationFrame(this.animate);
-                const time = performance.now() * 0.001;
-                this.molecule.animate(time);
-                this.renderer.render(this.scene, this.camera);
-            }
-        }
-
-        class Molecule extends THREE.Object3D {
-            constructor() {
-                super();
-                this.radius = 1.5;
-                this.detail = 40;
-                this.particleSizeMin = 0.01;
-                this.particleSizeMax = 0.08;
-                this.build();
-            }
-
-            build() {
-                this.geometry = new THREE.IcosahedronBufferGeometry(1, this.detail);
-
-                this.material = new THREE.PointsMaterial({
-                    map: this.dot(),
-                    blending: THREE.AdditiveBlending,
-                    color: 0x101A88,
-                    depthTest: false
-                });
-
-                this.setupShader(this.material);
-
-                this.mesh = new THREE.Points(this.geometry, this.material);
-                this.add(this.mesh);
-            }
-
-            dot(size = 32, color = '#FFFFFF') {
-                const sizeH = size * 0.5;
-                const canvas = document.createElement('canvas');
-                canvas.width = canvas.height = size;
-                const ctx = canvas.getContext('2d');
-                const circle = new Path2D();
-                circle.arc(sizeH, sizeH, sizeH, 0, 2 * Math.PI);
-                ctx.fillStyle = color;
-                ctx.fill(circle);
-                return new THREE.CanvasTexture(canvas);
-            }
-
-            setupShader(material) {
-                material.onBeforeCompile = (shader) => {
-                    shader.uniforms.time             = { value: 0 };
-                    shader.uniforms.radius           = { value: this.radius };
-                    shader.uniforms.particleSizeMin  = { value: this.particleSizeMin };
-                    shader.uniforms.particleSizeMax  = { value: this.particleSizeMax };
-                    shader.vertexShader = 'uniform float particleSizeMax;\n' + shader.vertexShader;
-                    shader.vertexShader = 'uniform float particleSizeMin;\n' + shader.vertexShader;
-                    shader.vertexShader = 'uniform float radius;\n'          + shader.vertexShader;
-                    shader.vertexShader = 'uniform float time;\n'            + shader.vertexShader;
-                    shader.vertexShader = document.getElementById('webgl-noise').textContent + '\n' + shader.vertexShader;
-                    shader.vertexShader = shader.vertexShader.replace(
-                        '#include <begin_vertex>',
-                        `
-                          vec3 p = position;
-                          float n = snoise(vec3(p.x*0.6 + time*0.2, p.y*0.4 + time*0.3, p.z*0.2 + time*0.2));
-                          p += n * 0.4;
-                          float l = radius / length(p);
-                          p *= l;
-                          float s = mix(particleSizeMin, particleSizeMax, n);
-                          vec3 transformed = vec3(p.x, p.y, p.z);
-                        `
-                    );
-                    shader.vertexShader = shader.vertexShader.replace(
-                        'gl_PointSize = size;',
-                        'gl_PointSize = s;'
-                    );
-                    material.userData.shader = shader;
-                };
-            }
-
-            animate(time) {
-                this.mesh.rotation.set(0, time * 0.2, 0);
-                if (this.material.userData.shader)
-                    this.material.userData.shader.uniforms.time.value = time;
-            }
-        }
-
-        new World();
-    </script>
-
-    <!-- Chat + Gateway logic (deferred) -->
     <script src="script.js" defer></script>
 </body>
 </html>

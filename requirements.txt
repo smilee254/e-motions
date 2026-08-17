@@ -10,6 +10,7 @@ python-dotenv
 geoip2
 qdrant-client
 pyarrow
+groq
 # Removed from production (local dev only — too heavy for Render 512MB free tier):
 # faiss-cpu    — replaced by Qdrant Cloud (HTTP-based, no local ML needed)
 # pandas       — only needed in _build_brain.py / continue_transfer.py local scripts

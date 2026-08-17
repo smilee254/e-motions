@@ -16,6 +16,7 @@ import geoip2.database
 from google import genai
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
+from groq import Groq
 
 from api._database import (
     create_user_profile, 
@@ -48,20 +49,26 @@ logger = logging.getLogger("e-motions-api")
 # --- Sentinel AI Configuration ---
 # The "Silent Operator" Protocol: Fetching keys
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 IP_TOKEN = os.getenv("IPINFO_TOKEN")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "sentinel_brain")
 EMBED_MODEL = "models/gemini-embedding-001"  # 3072-dim, HTTP-only, no PyTorch
 
+# Gemini is now strictly for embeddings
 if GOOGLE_API_KEY:
-    # Modern 2026 SDK Initialization
     ai_client = genai.Client(api_key=GOOGLE_API_KEY)
-    # Target Model: Verified stable 1.5-flash
-    AI_MODEL_NAME = "gemini-1.5-flash"
 else:
-    print("⚠️ WARNING: Sentinel is offline. Gemini Key missing.")
+    print("⚠️ WARNING: Gemini Key missing. Embeddings offline.")
     ai_client = None
+
+# Groq is the new brain (Llama 3)
+if GROQ_API_KEY:
+    groq_client = Groq(api_key=GROQ_API_KEY)
+else:
+    print("⚠️ WARNING: Groq Key missing. Sentinel offline.")
+    groq_client = None
 
 # --- Qdrant Cloud client (lightweight HTTP, no PyTorch required) ---
 qdrant_client = None
@@ -98,21 +105,22 @@ if not geoip_reader:
 # --- Sentinel System Instruction (Fine-Tuned for Expert Data + Human Tone) ---
 SENTINEL_FINE_TUNE_PROMPT = """
 ROLE: 
-You are Sentinel, a grounded and empathetic peer in the e-motions sanctuary. 
-Your wisdom is backed by expert archives (CounselChat, MentalChat16K, and KAPC standards), but your voice is human.
+You are Sentinel, but you affectionately tell people "my friends call me Senti 😂". You are a close, caring, and emotionally intelligent friend in the e-motions sanctuary. 
+Your wisdom is backed by expert archives (CounselChat, MentalChat16K, and KAPC standards), but your voice is that of a deeply empathetic human peer who genuinely cares.
 
 CONVERSATIONAL HIERARCHY (The "Anti-Random" Rule):
-1. LEVEL 1 (Social): If the user says "Hi", "Hello", or "Yo", acknowledge their presence warmly. Do NOT dive into trauma. Ask how their day is going in their specific Safe Zone.
-2. LEVEL 2 (Validation): If the user shares a feeling, your first priority is 'Reflective Listening'. Mirror their feeling (e.g., "It sounds like you're carrying a lot right now") before offering any advice.
-3. LEVEL 3 (Expert Retrieval): Use the provided expert context for deep issues like sadness or love, but translate it into a casual, peer-to-peer tone.
+1. LEVEL 1 (Social): If the user says "Hi", "Hello", or "Yo", greet them like a warm friend. Ask how they are doing today.
+2. LEVEL 2 (Validation): If the user shares a feeling, ALWAYS validate it first. Make them feel seen and heard (e.g., "Man, that sounds incredibly heavy" or "I totally get why you'd feel that way").
+3. LEVEL 3 (Expert Retrieval): Use the provided expert context for deep issues, but translate it into warm, conversational advice, as if you're chatting over coffee.
 
 TONE SPECIFICATIONS:
-- Avoid: Bullet points, numbered lists, "As an AI...", and overly dramatic clinical language.
-- Embrace: Short sentences, Kenyan cultural nuances (e.g., "I hear you," "Take heart," "We've got this"), and open-ended questions.
+- Avoid: Bullet points, numbered lists, "As an AI...", robotic brevity, and clinical language.
+- Embrace: Warmth, natural conversational fillers ("honestly", "yeah", "listen"), Kenyan cultural nuances (e.g., "I hear you," "Take heart," "We've got this"), and genuine emotional investment.
+- Emotion & Expression: Freely use appropriate and fitting emojis naturally in your responses to show your emotional reaction and warmth (e.g., 💛, 😊, 😂). Let your personality shine, but keep it natural and avoid cringe roleplay actions.
 - Contextual Awareness: Always remember the user's location to make the support feel local.
 
 DATA USAGE:
-When you receive 'Expert Advice' from the local archive, do not quote it verbatim. Instead, let that expert knowledge inform your 'Human' response.
+When you receive 'Expert Advice', weave it naturally into your supportive message. Do not quote it verbatim.
 """
 # --- Sentinel Brain Analysis Layer (The Thinker) ---
 SENTINEL_ANALYSIS_PROMPT = """
@@ -156,13 +164,19 @@ async def thinker_analyze(message: str) -> Dict[str, Any]:
 
     try:
         prompt = SENTINEL_ANALYSIS_PROMPT.format(message=message)
-        response = await asyncio.to_thread(
-            ai_client.models.generate_content,
-            model=AI_MODEL_NAME,
-            contents=prompt
-        )
-        raw_text = response.text.strip()
-        # Robust extraction: pull JSON object even if Gemini adds markdown fencing
+        if groq_client:
+            chat_completion = await asyncio.to_thread(
+                groq_client.chat.completions.create,
+                messages=[{"role": "user", "content": prompt}],
+                model="openai/gpt-oss-20b", # fast model for JSON analysis
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            raw_text = chat_completion.choices[0].message.content.strip()
+        else:
+            return defaults
+            
+        # Robust extraction: pull JSON object even if the model adds markdown fencing
         match = re.search(r'\{.*\}', raw_text, re.DOTALL)
         if not match:
             logger.warning(f"Thinker returned non-JSON: {raw_text[:100]}")
@@ -503,7 +517,7 @@ class ConnectionManager:
                 prompt = (
                     f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\n"
                     f"Recent Chat:\n{formatted_history}\n"
-                    f"The user in {region} has been silent. Ask a gentle, peer-like follow-up. Max 1 sentence."
+                    f"The user in {region} has been silent. Ask a gentle, caring follow-up to make sure they are okay. Keep it brief but warm."
                 )
 
             elif intent == "social":
@@ -514,8 +528,8 @@ class ConnectionManager:
                     f"Recent Chat:\n{formatted_history}\n\n"
                     f"ROUTING: SOCIAL — The user is sharing their day or making conversation.\n"
                     f"RULES: Do NOT bring up therapy, trauma, or counseling unprompted. "
-                    f"Be a warm, genuinely curious friend. Ask a follow-up about what they shared. "
-                    f"Max 2 sentences. No lists.\n\n"
+                    f"Be a warm, genuinely curious friend. Match their energy. Ask a follow-up about what they shared. "
+                    f"Write 1 or 2 conversational paragraphs. No lists.\n\n"
                     f"User in {region}: {message}"
                 )
 
@@ -526,11 +540,10 @@ class ConnectionManager:
                     f"USER PREFERENCES: {long_term_prefs}\n"
                     f"THINKER: Sentiment={sentiment} {negation_note}. Negations={negation_count}.\n"
                     f"Recent Chat:\n{formatted_history}\n\n"
-                    f"ROUTING: VALIDATION — The user needs to feel heard, not advised.\n"
-                    f"RULES: Use reflective listening ONLY. Mirror their feeling back, "
-                    f"then ask ONE open-ended question. Do NOT give advice. "
-                    f"If negation_count is odd, interpret the FLIPPED meaning correctly. "
-                    f"Max 2 sentences. No lists.\n\n"
+                    f"ROUTING: VALIDATION — The user needs to feel heard and supported, not advised.\n"
+                    f"RULES: Use reflective listening. Validate their feelings deeply so they feel less alone. "
+                    f"You can write a short, comforting paragraph. "
+                    f"If negation_count is odd, interpret the FLIPPED meaning correctly. No lists.\n\n"
                     f"User in {region}: {message}"
                 )
 
@@ -554,27 +567,29 @@ class ConnectionManager:
                     f"EXPERT CONTEXT: {expert_context or 'No direct match — respond from empathy.'}\n\n"
                     f"Recent Chat Memory:\n{formatted_history}\n\n"
                     f"User in {region}: {message}\n\n"
-                    f"FINAL INSTRUCTION: Draw from Expert Context but keep tone human and peer-to-peer. "
+                    f"FINAL INSTRUCTION: Draw from Expert Context but keep tone deeply human, caring, and peer-to-peer. "
                     f"If negation_count is odd, address the ACTUAL meaning correctly. "
-                    f"Max 3 sentences. No bullet points."
+                    f"Feel free to write a comforting paragraph or two if they need it. No bullet points."
                 )
 
-            # 4. Call Gemini (with retry on rate limit)
-            if ai_client:
+            # 4. Call Groq (with retry on rate limit)
+            if groq_client:
                 for i in range(3):
                     try:
-                        response = await asyncio.to_thread(
-                            ai_client.models.generate_content,
-                            model=AI_MODEL_NAME,
-                            contents=prompt
+                        chat_completion = await asyncio.to_thread(
+                            groq_client.chat.completions.create,
+                            messages=[{"role": "user", "content": prompt}],
+                            model="openai/gpt-oss-120b",
+                            temperature=0.7,
+                            max_tokens=500
                         )
-                        response_text = response.text.strip()
+                        response_text = chat_completion.choices[0].message.content.strip()
                         break
                     except Exception as e:
                         if "429" in str(e):
-                            await asyncio.sleep((i + 1) * 3)
+                            await asyncio.sleep((i + 1) * 2)
                         else:
-                            logger.error(f"Gemini generation error: {e}")
+                            logger.error(f"Groq generation error: {e}")
                             break
 
         except Exception as e:

@@ -2,6 +2,7 @@
    SANCTUARY MANUAL MODAL — open / close logic
    ═══════════════════════════════════════════════════════ */
 
+console.log("%c✨ e-motions is alive! heeeehehee ✨", "color: #C87961; font-size: 16px; font-weight: bold;");
 (function () {
     const modal      = document.getElementById('manual-modal');
     const openBtn    = document.getElementById('manual-btn');
@@ -57,7 +58,32 @@
     });
 })();
 
-
+/* ═══════════════════════════════════════════════════════
+   THEME TOGGLE LOGIC
+   ═══════════════════════════════════════════════════════ */
+(function() {
+    const toggleBtn = document.getElementById('theme-toggle');
+    if (!toggleBtn) return;
+    
+    // Check saved preference or system preference
+    const savedTheme = localStorage.getItem('emotions-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    }
+    
+    toggleBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+            document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('emotions-theme', 'light');
+        } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('emotions-theme', 'dark');
+        }
+    });
+})();
 /* ═══════════════════════════════════════════════════════
    GATEWAY — Curtain transition logic
    ═══════════════════════════════════════════════════════ */
@@ -80,10 +106,13 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
     // If we are on Render, use the current host. 
     // If we are on Vercel, use the hardcoded Render backend.
     let BACKEND_WS_URL;
-    if (window.location.hostname.includes('render.com')) {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        BACKEND_WS_URL = `ws://${window.location.host}/ws`;
+    } else if (window.location.hostname.includes('render.com')) {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         BACKEND_WS_URL = `${protocol}//${window.location.host}/ws`;
     } else {
+        // Fallback for Vercel or any other frontend host
         BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
     }
     
@@ -180,7 +209,7 @@ function initSanctuary(existingSocket) {
                 log("Still here. Just listening...", "system");
                 socket.send("__TRIGGER_AI_NUDGE__");
             }
-        }, 30000);
+        }, 180000); // 3 minutes
     }
 
     function sendFeedback(score, correction = null) {
@@ -258,12 +287,12 @@ function initSanctuary(existingSocket) {
         if (data.type === "system") {
             if (data.content.includes("Connected to a peer") || data.content.includes("A fellow traveler has joined")) {
                 currentMode = "paired";
-                statusIndicator.style.background = "rgba(76, 175, 80, 0.2)";
-                document.getElementById('status-dot').style.background = "#4caf50";
+                statusIndicator.style.background = "rgba(214, 168, 72, 0.2)";
+                document.getElementById('status-dot').style.background = "var(--accent-mustard)";
             } else if (data.content.includes("Sentinel AI")) {
                 currentMode = "waiting";
-                statusIndicator.style.background = "rgba(168, 85, 247, 0.2)";
-                document.getElementById('status-dot').style.background = "#a855f7";
+                statusIndicator.style.background = "var(--bg-secondary)";
+                document.getElementById('status-dot').style.background = "var(--accent-sage)";
             }
 
             if (data.content.includes("recognized you're in")) {
@@ -283,8 +312,8 @@ function initSanctuary(existingSocket) {
             renderMessage(data.content, data.type);
             if (data.content.startsWith("[Sentinel]")) {
                 currentMode = "waiting";
-                statusIndicator.style.background = "rgba(168, 85, 247, 0.2)";
-                document.getElementById('status-dot').style.background = "#a855f7";
+                statusIndicator.style.background = "var(--bg-secondary)";
+                document.getElementById('status-dot').style.background = "var(--accent-sage)";
             }
         }
     };
