@@ -116,7 +116,7 @@ def generate_response(user_message: str, chat_history: list) -> str:
     try:
         chat_completion = groq_client.chat.completions.create(
             messages=messages,
-            model="llama3-70b-8192",
+            model="openai/gpt-oss-120b",
             temperature=0.6,
             max_tokens=300,
         )
