@@ -159,7 +159,7 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
 
 function initSanctuary(existingSocket) {
     // Reuse the socket that was opened during the handshake check
-    const socket = existingSocket;
+    let socket = existingSocket;
 
     // Heartbeat to prevent Render from dropping idle connections (Render timeout is ~100s)
     setInterval(() => {
@@ -288,48 +288,64 @@ function initSanctuary(existingSocket) {
     statusIndicator.classList.add('connected');
     startInactivityTimer();
 
-    socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+    const setupSocketEvents = (activeSocket) => {
+        activeSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
 
-        if (data.type === "system") {
-            if (data.content.includes("Connected to a peer") || data.content.includes("A fellow traveler has joined")) {
-                currentMode = "paired";
-                statusIndicator.style.background = "rgba(214, 168, 72, 0.2)";
-                document.getElementById('status-dot').style.background = "var(--accent-mustard)";
-            } else if (data.content.includes("Sentinel AI")) {
-                currentMode = "waiting";
-                statusIndicator.style.background = "var(--bg-secondary)";
-                document.getElementById('status-dot').style.background = "var(--accent-sage)";
-            }
+            if (data.type === "system") {
+                if (data.content.includes("Connected to a peer") || data.content.includes("A fellow traveler has joined")) {
+                    currentMode = "paired";
+                    statusIndicator.style.background = "rgba(214, 168, 72, 0.2)";
+                    document.getElementById('status-dot').style.background = "var(--accent-mustard)";
+                } else if (data.content.includes("Sentinel AI")) {
+                    currentMode = "waiting";
+                    statusIndicator.style.background = "var(--bg-secondary)";
+                    document.getElementById('status-dot').style.background = "var(--accent-sage)";
+                }
 
-            if (data.content.includes("recognized you're in")) {
-                const parts = data.content.split("recognized you're in ");
-                if (parts.length > 1) {
-                    statusText.textContent = "Safe Zone: " + parts[1].split(".")[0];
+                if (data.content.includes("recognized you're in")) {
+                    const parts = data.content.split("recognized you're in ");
+                    if (parts.length > 1) {
+                        statusText.textContent = "Safe Zone: " + parts[1].split(".")[0];
+                    }
+                }
+
+                log(data.content, "system");
+            } else if (data.type === "metadata") {
+                if (data.key === "safe_exit_contact") {
+                    safeExitContact = data.value;
+                }
+            } else {
+                hideThinking();
+                renderMessage(data.content, data.type);
+                if (data.content.startsWith("[Sentinel]")) {
+                    currentMode = "waiting";
+                    statusIndicator.style.background = "var(--bg-secondary)";
+                    document.getElementById('status-dot').style.background = "var(--accent-sage)";
                 }
             }
+        };
 
-            log(data.content, "system");
-        } else if (data.type === "metadata") {
-            if (data.key === "safe_exit_contact") {
-                safeExitContact = data.value;
-            }
-        } else {
-            hideThinking();
-            renderMessage(data.content, data.type);
-            if (data.content.startsWith("[Sentinel]")) {
-                currentMode = "waiting";
-                statusIndicator.style.background = "var(--bg-secondary)";
-                document.getElementById('status-dot').style.background = "var(--accent-sage)";
-            }
-        }
+        activeSocket.onclose = () => {
+            statusText.textContent = "Reconnecting...";
+            statusIndicator.classList.remove('connected');
+            clearTimeout(inactivityTimer);
+            
+            // Auto-reconnect after 3 seconds
+            setTimeout(() => {
+                let newSocket = new WebSocket(BACKEND_WS_URL);
+                newSocket.onopen = () => {
+                    statusText.textContent = "Reconnected";
+                    statusIndicator.classList.add('connected');
+                    socket = newSocket; // Update the reference so sendBtn uses the new socket
+                    setupSocketEvents(newSocket);
+                };
+                newSocket.onerror = activeSocket.onclose;
+            }, 3000);
+        };
     };
 
-    socket.onclose = () => {
-        statusText.textContent = "Disconnected";
-        statusIndicator.classList.remove('connected');
-        clearTimeout(inactivityTimer);
-    };
+    setupSocketEvents(socket);
 
     // ── UI Listeners ───────────────────────────────────────
     if (sendBtn) sendBtn.addEventListener('click', handleSend);
