@@ -745,7 +745,7 @@ class ConnectionManager:
                         chat_completion = await asyncio.to_thread(
                             groq_client.chat.completions.create,
                             messages=[{"role": "user", "content": prompt}],
-                            model="openai/gpt-oss-120b",
+                            model="llama3-70b-8192",
                             temperature=0.7,
                             max_tokens=500
                         )
