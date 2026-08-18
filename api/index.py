@@ -483,24 +483,9 @@ class ConnectionManager:
         # Track who is currently talking to AI
         self.ai_sessions: Set[str] = set()
 
-    async def connect(self, websocket: WebSocket, geo_info: tuple, requested_session_id: str = None):
+    async def connect(self, websocket: WebSocket, geo_info: tuple):
         await websocket.accept()
-        
-        if requested_session_id and requested_session_id in self.user_data:
-            session_id = requested_session_id
-            self.active_connections[session_id] = websocket
-            
-            # Send Regional Safety Metadata again on reconnect
-            county = self.user_data[session_id]["county"]
-            contact = REGIONAL_CONTACTS.get(county, "Red Cross: 1199")
-            await self.active_connections[session_id].send_json({
-                "type": "metadata",
-                "key": "safe_exit_contact",
-                "value": contact
-            })
-            return session_id
-
-        session_id = requested_session_id if requested_session_id else str(uuid.uuid4())
+        session_id = str(uuid.uuid4())
         self.active_connections[session_id] = websocket
         
         city, region, country = geo_info
@@ -592,35 +577,20 @@ class ConnectionManager:
         await self.send_system_msg(id2, f"Connected to a peer ({level}). Your diary is listening.")
 
     def disconnect(self, session_id: str):
-        # We only remove the active connection immediately.
-        # This allows mobile users to seamlessly reconnect if they background the app.
-        self.active_connections.pop(session_id, None)
-
-    async def cleanup_session(self, session_id: str):
-        """Called after a grace period. Cleans up if user hasn't reconnected."""
-        if session_id in self.active_connections:
-            return  # They successfully reconnected
-
         peer_id = self.matches.get(session_id)
         
         # Cleanup matches
-        self.matches.pop(session_id, None)
-        if peer_id:
-            self.matches.pop(peer_id, None)
-            
-        # Cleanup AI sessions
+        if session_id in self.matches:
+            self.matches.pop(session_id)
+            if peer_id in self.matches:
+                self.matches.pop(peer_id)
+                
         self.ai_sessions.discard(session_id)
             
         self.user_data.pop(session_id, None)
+        self.active_connections.pop(session_id, None)
             
-        # Notify peer and find them a new audience
-        if peer_id and peer_id in self.active_connections:
-            await self.send_system_msg(peer_id, "Your peer lost connection. Finding a new audience...")
-            # Try to instantly match the orphaned peer with someone else
-            found = await self.find_peer(peer_id)
-            if not found:
-                self.ai_sessions.add(peer_id)
-                await self.send_system_msg(peer_id, "No human peers are available right now. Sentinel AI has gently stepped in to listen.")
+        return peer_id
 
     async def send_system_msg(self, session_id: str, message: str):
         if session_id in self.active_connections:
@@ -856,7 +826,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, session_id: str = None):
+async def websocket_endpoint(websocket: WebSocket):
     # Detect IP
     # Detect IP using the same logic as middleware for consistency
     client_ip = websocket.headers.get("x-forwarded-for") or websocket.client.host
@@ -864,14 +834,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = None):
         client_ip = client_ip.split(",")[0].strip()
         
     geo_info = await get_user_geo(client_ip)
-    actual_session_id = await manager.connect(websocket, geo_info, session_id)
-    
-    # Send the session ID so the client can store it for reconnections
-    await manager.active_connections[actual_session_id].send_json({
-        "type": "metadata",
-        "key": "session_id",
-        "value": actual_session_id
-    })
+    actual_session_id = await manager.connect(websocket, geo_info)
     try:
         while True:
             # Receive text from user
@@ -967,14 +930,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = None):
             await manager.relay_message(sid, data)
                 
     except WebSocketDisconnect:
-        manager.disconnect(actual_session_id)
-        
-        # Schedule cleanup task with a 15-second grace period for mobile reconnections
-        async def delayed_cleanup():
-            await asyncio.sleep(15)
-            await manager.cleanup_session(actual_session_id)
-            
-        asyncio.create_task(delayed_cleanup())
+        peer_id = manager.disconnect(actual_session_id)
+        if peer_id:
+            await manager.send_system_msg(peer_id, "Your peer has disconnected. Finding a new audience...")
+            # Try to instantly match the orphaned peer with someone else
+            found = await manager.find_peer(peer_id)
+            if not found:
+                manager.ai_sessions.add(peer_id)
+                await manager.send_system_msg(peer_id, "No human peers are available right now. Sentinel AI has gently stepped in to listen.")
 
 # Mount static files at root AFTER routes are defined
 app.mount("/", StaticFiles(directory="public", html=True), name="public")

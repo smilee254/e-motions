@@ -149,15 +149,8 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
         BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
     }
     
-    // Resume session if one exists
-    let sessionId = sessionStorage.getItem('emotions-session-id');
-    let connectionUrl = BACKEND_WS_URL;
-    if (sessionId) {
-        connectionUrl += `?session_id=${sessionId}`;
-    }
-    
-    console.log("Connecting to Sanctuary at:", connectionUrl);
-    gatewaySocket = new WebSocket(connectionUrl);
+    console.log("Connecting to Sanctuary at:", BACKEND_WS_URL);
+    gatewaySocket = new WebSocket(BACKEND_WS_URL);
 
     // SUCCESS — handshake confirmed → open the curtain
     gatewaySocket.onopen = () => {
@@ -351,8 +344,6 @@ function initSanctuary(existingSocket) {
             } else if (data.type === "metadata") {
                 if (data.key === "safe_exit_contact") {
                     safeExitContact = data.value;
-                } else if (data.key === "session_id") {
-                    sessionStorage.setItem('emotions-session-id', data.value);
                 }
             } else {
                 hideThinking();
@@ -371,22 +362,17 @@ function initSanctuary(existingSocket) {
             clearTimeout(inactivityTimer);
             
             setTimeout(() => {
-                let sessionId = sessionStorage.getItem('emotions-session-id');
-                let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                let host = window.location.host;
-                let reconnectUrl = `ws://${host}/ws`;
-                
-                if (host.includes('render.com')) {
-                    reconnectUrl = `${protocol}//${host}/ws`;
-                } else if (host !== 'localhost' && host !== '127.0.0.1') {
-                    reconnectUrl = 'wss://e-motions.onrender.com/ws';
+                let BACKEND_WS_URL;
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    BACKEND_WS_URL = `ws://${window.location.host}/ws`;
+                } else if (window.location.hostname.includes('render.com')) {
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    BACKEND_WS_URL = `${protocol}//${window.location.host}/ws`;
+                } else {
+                    BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
                 }
                 
-                if (sessionId) {
-                    reconnectUrl += `?session_id=${sessionId}`;
-                }
-                
-                let newSocket = new WebSocket(reconnectUrl);
+                let newSocket = new WebSocket(BACKEND_WS_URL);
                 newSocket.onopen = () => {
                     statusText.textContent = "Reconnected";
                     statusIndicator.classList.add('connected');
