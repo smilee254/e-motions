@@ -721,8 +721,13 @@ class ConnectionManager:
                             top_p=1,
                             reasoning_effort="high"
                         )
-                        response_text = chat_completion.choices[0].message.content.strip()
-                        break
+                        msg = chat_completion.choices[0].message
+                        # Reasoning models (like gpt-oss-120b with reasoning_effort)
+                        # sometimes return content=None — fall back to reasoning_content
+                        content = msg.content or getattr(msg, "reasoning_content", None) or ""
+                        response_text = content.strip()
+                        if response_text:
+                            break
                     except Exception as e:
                         if "429" in str(e):
                             await asyncio.sleep((i + 1) * 2)
