@@ -790,6 +790,7 @@ h1, h2, h3, .brand-text {
     max-height: 120px;
     overflow-y: auto;
     transition: border-color 0.2s, background 0.2s;
+    box-sizing: border-box;
 }
 #entry-input:focus {
     background: var(--bg-card);
@@ -913,9 +914,10 @@ body.quiet-mode #quiet-btn     { color: var(--accent-mustard) !important; }
         min-width: 42px;
     }
     #entry-input {
-        padding: 0.7rem 1rem;
+        padding: 0.75rem 1rem;
         font-size: 0.95rem;
         border-radius: 20px;
+        line-height: 1.3;
     }
 
     /* Bubbles */
@@ -937,7 +939,7 @@ body.quiet-mode #quiet-btn     { color: var(--accent-mustard) !important; }
     .modal-accept-btn { width: 100%; }
 
     /* Theme toggle */
-    .theme-toggle-btn { top: 0.75rem; right: 0.75rem; left: auto; width: 38px; height: 38px; }
+    .theme-toggle-btn { top: 0.75rem; left: 0.75rem; right: auto; width: 38px; height: 38px; }
 }
 
 /* Extra-small: 360px */
