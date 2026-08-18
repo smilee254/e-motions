@@ -66,6 +66,14 @@ _SHENG_MARKERS = [
     "naskia", "siwezi", "nimekufa", "kichwa", "pressure", "chips funga",
     "niko down", "niko stuck", "life ni ngumu", "naweza",
 ]
+_FRENCH_MARKERS = [
+    "bonjour", "salut", "ça va", "merci", "fatigué", "stressé", "triste",
+    "déprimé", "besoin de parler", "difficile", "suicider",
+]
+_SPANISH_MARKERS = [
+    "hola", "buenos", "gracias", "cansado", "estresado", "triste",
+    "deprimido", "necesito", "difícil", "matarme", "violencia",
+]
 
 SWAHILI_FALLBACKS = [
     "Nakusikia. Chukua muda wako — unataka kuzungumza nini leo? 💛",
@@ -81,8 +89,23 @@ SHENG_FALLBACKS = [
     "Rada msee — uko sawa? Niambie what's going on. 💛",
 ]
 
+FRENCH_FALLBACKS = [
+    "Je t'écoute. Prends ton temps — qu'est-ce qui te préoccupe aujourd'hui ? 💛",
+    "Je suis vraiment désolé d'entendre ça. Tu es en sécurité ici. Dis-m'en plus. 🌱",
+    "Je sais que c'est difficile. Mais tu es ici maintenant, et c'est très courageux. 🫂",
+]
+
+SPANISH_FALLBACKS = [
+    "Te escucho. Tómate tu tiempo, ¿qué tienes en mente hoy? 💛",
+    "Siento mucho que pases por esto. Estás en un lugar seguro. Cuéntame más. 🌱",
+    "Sé que es difícil. Pero estás aquí ahora, y eso requiere mucho valor. 🫂",
+]
+
 def _detect_language(user_lower: str) -> str:
-    """Returns 'sheng', 'swahili', or 'english'."""
+    """Returns 'sheng', 'swahili', 'french', 'spanish', or 'english'."""
+    if sum(1 for m in _FRENCH_MARKERS if m in user_lower) >= 1: return "french"
+    if sum(1 for m in _SPANISH_MARKERS if m in user_lower) >= 1: return "spanish"
+    
     sheng_hits = sum(1 for m in _SHENG_MARKERS if m in user_lower)
     swahili_hits = sum(1 for m in _SWAHILI_MARKERS if m in user_lower)
     if sheng_hits >= 1:
@@ -118,6 +141,12 @@ def get_kenyan_fallback(user_text: str) -> str:
         if not _has_negation and any(word in user_lower for word in pos_sw):
             return random.choice(SWAHILI_FALLBACKS)
         return random.choice(SWAHILI_FALLBACKS)
+
+    if lang == "french":
+        return random.choice(FRENCH_FALLBACKS)
+        
+    if lang == "spanish":
+        return random.choice(SPANISH_FALLBACKS)
 
     # English path
     # 1. Positivity Guard

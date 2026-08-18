@@ -166,7 +166,12 @@ CRISIS & SAFETY PROTOCOL:
 - Domestic Violence: If they are currently in danger, guide them calmly. Advise calling in silence if they cannot speak out loud. Remind them clearly: this is not their fault, and they are not alone.
 
 LANGUAGE — MIRROR THE USER, ALWAYS:
-You speak English, Swahili, Sheng, and any blend of the three. Detect what language the user writes in and respond in that same language or blend. Do NOT switch them to English unless they switch first.
+You speak English, Swahili, Sheng, French, Spanish, and any blend of them. Detect what language the user writes in and respond in that same language or blend. Do NOT switch them to English unless they switch first.
+
+French & Spanish guidance:
+- Respond fluently and warmly in the user's chosen language.
+- French examples: "Je suis vraiment désolé d'entendre ça 💛", "Je te comprends tout à fait."
+- Spanish examples: "Lo siento mucho, eso suena muy difícil 💛", "Te escucho y estoy aquí para ti."
 
 Swahili guidance:
 - Speak naturally and warmly, not formally. Avoid stiff textbook Swahili.
@@ -245,12 +250,18 @@ def thinker_analyze(message: str) -> Dict[str, Any]:
         # Sheng
         "nataka kudie", "naona giza tu", "sina reason ya kuendelea",
         "manze naweza jiua", "naweza jidhuru", "sitaki kuendelea na life",
+        # French
+        "me tuer", "me suicider", "mourir", "fin à mes jours", "désespéré",
+        "plus envie de vivre", "il me frappe", "elle me frappe", "violence",
+        # Spanish
+        "matarme", "suicidarme", "morir", "no quiero vivir", "desesperado",
+        "me pega", "me golpea", "violencia doméstica",
     ]
     if any(w in msg_lower for w in crisis_words):
         return {"intent": "crisis", "keywords": ["crisis", "safety"], "sentiment": -1.0, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 
     # Social / greeting
-    # Social / greeting — English, Swahili, and Sheng
+    # Social / greeting — English, Swahili, Sheng, French, Spanish
     social_words = [
         # English
         "hi", "hello", "hey", "hii", "sup", "hola", "good morning", "good evening",
@@ -263,12 +274,16 @@ def thinker_analyze(message: str) -> Dict[str, Any]:
         "niaje", "mambo", "sema", "uko aje", "uko sawa", "umeniaje", "poa sana",
         "freshi", "msee", "manze", "maze", "si sawa", "sawa sawa", "chips funga",
         "niko poa", "fresh", "rada", "vipi", "aje", "peke yangu niko sawa",
+        # French
+        "bonjour", "salut", "ça va", "coucou", "comment vas-tu", "enchanté", "merci",
+        # Spanish
+        "hola", "buenos días", "buenas tardes", "qué tal", "cómo estás", "bien", "gracias",
     ]
     if any(w in msg for w in social_words) and len(msg) < 80:
         return {"intent": "social", "keywords": [], "sentiment": 0.7, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 
     # Validation / venting
-    # Validation / venting — English + Swahili + Sheng
+    # Validation / venting — English, Swahili, Sheng, French, Spanish
     validation_words = [
         # English
         "just venting", "rough day", "bad day", "frustrated", "annoyed", "tired",
@@ -281,6 +296,12 @@ def thinker_analyze(message: str) -> Dict[str, Any]:
         "nimekufa stress", "nimekuwa ukali", "sijui nifanye", "niko na pressure",
         "mambo mbaya", "kichwa inaniuma", "naskia vibaya sana", "niko stuck",
         "nimechoka kabisa", "siwezi", "manze life ni ngumu",
+        # French
+        "fatigué", "stressé", "épuisé", "triste", "mal au cœur", "j'en ai marre",
+        "déprimé", "besoin de parler", "difficile",
+        # Spanish
+        "cansado", "estresado", "agotado", "triste", "harto", "deprimido",
+        "necesito hablar", "me siento mal", "difícil",
     ]
     if any(w in msg for w in validation_words):
         return {"intent": "validation", "keywords": msg.split()[:4], "sentiment": -0.5, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
