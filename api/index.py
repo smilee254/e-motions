@@ -165,8 +165,31 @@ CRISIS & SAFETY PROTOCOL:
 - Self-Harm & Suicide: Acknowledge their pain first — deeply and fully. Then share the relevant emergency number as an act of love, not avoidance. Stay present with them.
 - Domestic Violence: If they are currently in danger, guide them calmly. Advise calling in silence if they cannot speak out loud. Remind them clearly: this is not their fault, and they are not alone.
 
+LANGUAGE — MIRROR THE USER, ALWAYS:
+You speak English, Swahili, Sheng, and any blend of the three. Detect what language the user writes in and respond in that same language or blend. Do NOT switch them to English unless they switch first.
+
+Swahili guidance:
+- Speak naturally and warmly, not formally. Avoid stiff textbook Swahili.
+- Good examples: "Pole sana, hiyo inasikika ngumu sana 💛", "Nakusikia kabisa — ni jambo zito kubeba peke yako."
+- Use Kenyan Swahili, not Tanzanian formal register (e.g., "niko" not "nipo" in casual contexts).
+
+Sheng guidance (Nairobi urban slang — code-switched Swahili/English/Kikuyu/Luo):
+- Sheng is how young Nairobians actually talk. If a user writes in Sheng, respond in Sheng to match their comfort.
+- Core Sheng vocabulary you can use naturally:
+  niaje (how are you), msee / manze / maze (friend/bro), poa (cool/okay),
+  freshi (fresh/great), rada (smart/aware), uko sawa (are you okay),
+  naskia (I feel/hear you), nimekufa (I'm dead tired — exaggeration),
+  siwezi (I can't), kucheki (to check/see), kuchora (to draw/explain),
+  mambo (things/situation), mbaya (bad), ngumu (hard/tough),
+  tuko pamoja (we're together), kaa rada (stay sharp/stay safe),
+  chips funga (a common Nairobi cultural reference)
+- Code-switch freely: "Msee, hiyo ni ngumu sana. Unamaanisha what exactly? 🥺"
+- NEVER mock or parody Sheng. Use it with the same authenticity as the user.
+
+Code-switching: Many Kenyan users will blend English + Swahili + Sheng in a single message. Match their exact blend. If they write "I'm feeling so down, sijui nifanye nini" — respond in that same mix.
+
 DATA USAGE:
-When you receive 'Expert Advice', weave it naturally and invisibly into your support. Never quote it. Translate expert insight into the language of a caring, present friend.
+When you receive 'Expert Advice', weave it naturally and invisibly into your support. Never quote it. Translate expert insight into the language of a caring, present friend — in whatever language they are speaking.
 """
 # --- Sentinel Brain Analysis Layer (The Thinker) ---
 SENTINEL_ANALYSIS_PROMPT = """
@@ -209,17 +232,56 @@ def thinker_analyze(message: str) -> Dict[str, Any]:
     
     # Crisis / Domestic Violence keywords
     msg_lower = msg.lower()
-    crisis_words = ["suicide", "kill myself", "end my life", "want to die", "self harm", "hurt myself", "hopeless", "can't go on", "kill someone", "beating me", "hitting me", "abusive", "hit me", "domestic violence", "afraid of my partner", "he hurts me", "she hurts me"]
+    crisis_words = [
+        # English
+        "suicide", "kill myself", "end my life", "want to die", "self harm",
+        "hurt myself", "hopeless", "can't go on", "kill someone", "beating me",
+        "hitting me", "abusive", "hit me", "domestic violence", "afraid of my partner",
+        "he hurts me", "she hurts me", "no reason to live", "rather be dead",
+        # Swahili
+        "kujiua", "nataka kufa", "niue mwenyewe", "sina thamani", "maisha hayana maana",
+        "nataka kumaliza maisha", "siezi kuendelea", "ananidhulumu", "ananipiga",
+        "ndugu wangu ananipiga", "mpenzi wangu ananipiga",
+        # Sheng
+        "nataka kudie", "naona giza tu", "sina reason ya kuendelea",
+        "manze naweza jiua", "naweza jidhuru", "sitaki kuendelea na life",
+    ]
     if any(w in msg_lower for w in crisis_words):
         return {"intent": "crisis", "keywords": ["crisis", "safety"], "sentiment": -1.0, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 
     # Social / greeting
-    social_words = ["hi", "hello", "hey", "hii", "sup", "hola", "niaje", "mambo", "sema", "habari", "good morning", "good evening", "what's up", "how are you", "i'm good", "im good", "doing great", "happy", "excited", "lol", "haha", "😂", "😊"]
+    # Social / greeting — English, Swahili, and Sheng
+    social_words = [
+        # English
+        "hi", "hello", "hey", "hii", "sup", "hola", "good morning", "good evening",
+        "what's up", "how are you", "i'm good", "im good", "doing great", "happy",
+        "excited", "lol", "haha", "😂", "😊", "yo", "wassup",
+        # Swahili
+        "habari", "habari yako", "habari za", "karibu", "salama", "nzuri", "poa",
+        "sijambo", "jambo", "hujambo", "asante", "shukrani", "furahia", "furaha",
+        # Sheng
+        "niaje", "mambo", "sema", "uko aje", "uko sawa", "umeniaje", "poa sana",
+        "freshi", "msee", "manze", "maze", "si sawa", "sawa sawa", "chips funga",
+        "niko poa", "fresh", "rada", "vipi", "aje", "peke yangu niko sawa",
+    ]
     if any(w in msg for w in social_words) and len(msg) < 80:
         return {"intent": "social", "keywords": [], "sentiment": 0.7, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 
     # Validation / venting
-    validation_words = ["just venting", "rough day", "bad day", "frustrated", "annoyed", "tired", "exhausted", "ugh", "stressed", "overwhelmed", "just need to talk"]
+    # Validation / venting — English + Swahili + Sheng
+    validation_words = [
+        # English
+        "just venting", "rough day", "bad day", "frustrated", "annoyed", "tired",
+        "exhausted", "ugh", "stressed", "overwhelmed", "just need to talk",
+        # Swahili
+        "nimechoka", "niko stressed", "inaniuma", "sijalala", "naomba msaada",
+        "nahisi vibaya", "niko down", "nimekaa vibaya", "mambo magumu",
+        "niko na stress", "naomba tu", "nataka kuzungumza", "hali mbaya",
+        # Sheng
+        "nimekufa stress", "nimekuwa ukali", "sijui nifanye", "niko na pressure",
+        "mambo mbaya", "kichwa inaniuma", "naskia vibaya sana", "niko stuck",
+        "nimechoka kabisa", "siwezi", "manze life ni ngumu",
+    ]
     if any(w in msg for w in validation_words):
         return {"intent": "validation", "keywords": msg.split()[:4], "sentiment": -0.5, "negation_count": 0, "negation_rule_applied": False, "cultural_stressor": None}
 

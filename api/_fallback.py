@@ -55,15 +55,71 @@ def _kb_keyword_match(user_lower: str) -> str | None:
             return item["reply"]
     return None
 
+# ── Swahili / Sheng language detection ──────────────────────────────────────
+_SWAHILI_MARKERS = [
+    "habari", "sijambo", "jambo", "nzuri", "asante", "pole", "karibu",
+    "nimechoka", "naomba", "nahisi", "niko", "nataka", "kuzungumza",
+    "inaniuma", "sijalala", "mambo", "maisha", "najua", "nakusikia",
+]
+_SHENG_MARKERS = [
+    "niaje", "msee", "manze", "maze", "poa", "freshi", "rada", "uko aje",
+    "naskia", "siwezi", "nimekufa", "kichwa", "pressure", "chips funga",
+    "niko down", "niko stuck", "life ni ngumu", "naweza",
+]
+
+SWAHILI_FALLBACKS = [
+    "Nakusikia. Chukua muda wako — unataka kuzungumza nini leo? 💛",
+    "Pole sana kwa hilo. Uko salama hapa. Niambie zaidi. 🌱",
+    "Najua ni ngumu. Lakini uko hapa sasa, na hiyo ni ujasiri mkubwa. 🫂",
+    "Nakusikia kabisa. Endelea — niko hapa nasikiliza. 💛",
+]
+
+SHENG_FALLBACKS = [
+    "Naskia msee. Relax, uko safe hapa — niambie mambo yako. 💛",
+    "Pole sana manze. Hii ni space yako — zungumza tu. 🌱",
+    "Niko hapa kukusikia. Mambo ni mazito, lakini tuko pamoja. 🫂",
+    "Rada msee — uko sawa? Niambie what's going on. 💛",
+]
+
+def _detect_language(user_lower: str) -> str:
+    """Returns 'sheng', 'swahili', or 'english'."""
+    sheng_hits = sum(1 for m in _SHENG_MARKERS if m in user_lower)
+    swahili_hits = sum(1 for m in _SWAHILI_MARKERS if m in user_lower)
+    if sheng_hits >= 1:
+        return "sheng"
+    if swahili_hits >= 1:
+        return "swahili"
+    return "english"
+
 def get_kenyan_fallback(user_text: str) -> str:
     """
-    Intent-aware fallback (used only when Gemini is offline):
-    1. Positivity Guard
-    2. Local Knowledge Base keyword match
-    3. Generic holding response
+    Intent-aware fallback (used only when Groq is offline).
+    Detects Swahili/Sheng and responds in the user's language.
+    1. Language detection
+    2. Positivity Guard
+    3. Local Knowledge Base keyword match
+    4. Language-appropriate holding response
     """
     user_lower = user_text.lower()
+    lang = _detect_language(user_lower)
 
+    # Language-native responses take priority for greetings/positive vibes
+    if lang == "sheng":
+        _negations = ["si ", "sio ", "siyo ", "not ", "can't ", "won't "]
+        _has_negation = any(neg in user_lower for neg in _negations)
+        if not _has_negation and any(word in user_lower for word in ["poa", "freshi", "sawa", "niko poa", "niko sawa"]):
+            return random.choice(SHENG_FALLBACKS)
+        return random.choice(SHENG_FALLBACKS)
+
+    if lang == "swahili":
+        _negations = ["si ", "sio ", "siyo ", "hapana ", "not "]
+        _has_negation = any(neg in user_lower for neg in _negations)
+        pos_sw = ["nzuri", "furaha", "poa", "salama", "asante", "vizuri"]
+        if not _has_negation and any(word in user_lower for word in pos_sw):
+            return random.choice(SWAHILI_FALLBACKS)
+        return random.choice(SWAHILI_FALLBACKS)
+
+    # English path
     # 1. Positivity Guard
     _negations = ["not ", "never ", "don't ", "can't ", "won't ", "isn't ", "aren't ", "wasn't ", "no "]
     _has_negation = any(neg in user_lower for neg in _negations)
