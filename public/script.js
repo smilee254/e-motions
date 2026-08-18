@@ -4,10 +4,48 @@
 
 console.log("%c✨ e-motions is alive! heeeehehee ✨", "color: #C87961; font-size: 16px; font-weight: bold;");
 (function () {
-    const modal      = document.getElementById('manual-modal');
-    const openBtn    = document.getElementById('manual-btn');
-    const closeBtn   = document.getElementById('modal-close');
-    const acceptBtn  = document.getElementById('modal-accept');
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const manualBtn      = document.getElementById('manual-btn');
+    const modal          = document.getElementById('manual-modal');
+    const modalClose     = document.getElementById('modal-close');
+    const modalAcceptBtn = document.getElementById('modal-accept');
+    const escapeBtn      = document.getElementById('escape-btn');
+    const quietBtn       = document.getElementById('quiet-btn');
+
+    // ── Quiet Mode Logic ──
+    const initQuietMode = () => {
+        const isQuiet = localStorage.getItem('quiet-mode') === 'true';
+        if (isQuiet) document.body.classList.add('quiet-mode');
+    };
+    initQuietMode();
+
+    if (quietBtn) {
+        quietBtn.addEventListener('click', () => {
+            const isQuiet = document.body.classList.toggle('quiet-mode');
+            localStorage.setItem('quiet-mode', isQuiet);
+        });
+    }
+
+    // ── Quick Escape Logic ──
+    const triggerEscape = () => {
+        window.location.replace("https://www.google.com");
+    };
+    if (escapeBtn) {
+        escapeBtn.addEventListener('click', triggerEscape);
+    }
+    
+    let escCount = 0;
+    let escTimer;
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            escCount++;
+            clearTimeout(escTimer);
+            if (escCount >= 3) {
+                triggerEscape();
+            }
+            escTimer = setTimeout(() => { escCount = 0; }, 1000);
+        }
+    });
 
     function openModal(scrollToId) {
         modal.removeAttribute('hidden');
@@ -29,20 +67,15 @@ console.log("%c✨ e-motions is alive! heeeehehee ✨", "color: #C87961; font-si
     }
 
     // "Read the Sanctuary Manual" button
-    if (openBtn)   openBtn.addEventListener('click', () => openModal());
+    if (manualBtn)   manualBtn.addEventListener('click', () => openModal());
 
     // ✕ button and backdrop click
-    if (closeBtn)  closeBtn.addEventListener('click', closeModal);
+    if (modalClose)  modalClose.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-    // Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !modal.hidden) closeModal();
-    });
-
     // "I understand — take me in" — close modal AND trigger gateway entrance
-    if (acceptBtn) {
-        acceptBtn.addEventListener('click', () => {
+    if (modalAcceptBtn) {
+        modalAcceptBtn.addEventListener('click', () => {
             closeModal();
             const welcomeBtn = document.getElementById('welcome-btn');
             if (welcomeBtn && !welcomeBtn.disabled) welcomeBtn.click();
@@ -185,7 +218,6 @@ function initSanctuary(existingSocket) {
     const statusText = document.getElementById('status-text');
     const statusIndicator = document.querySelector('.status-indicator');
     const logicMeter = document.getElementById('logic-meter');
-    const sosBtn = document.getElementById('sos-btn');
     const sendBtn = document.getElementById('send-btn');
 
     function showThinking() {
@@ -289,8 +321,6 @@ function initSanctuary(existingSocket) {
     }
 
     // ── Socket Events ──────────────────────────────────────
-    // The socket is already OPEN (handshake completed before curtain opened),
-    // so we update the UI state immediately rather than waiting for onopen.
     statusText.textContent = "Connected to Safe Zone";
     statusIndicator.classList.add('connected');
     startInactivityTimer();
@@ -340,10 +370,8 @@ function initSanctuary(existingSocket) {
             statusIndicator.classList.remove('connected');
             clearTimeout(inactivityTimer);
             
-            // Auto-reconnect after 3 seconds
             setTimeout(() => {
                 let sessionId = sessionStorage.getItem('emotions-session-id');
-                // We recreate the backend URL dynamically in case of full disconnects
                 let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 let host = window.location.host;
                 let reconnectUrl = `ws://${host}/ws`;
@@ -362,7 +390,7 @@ function initSanctuary(existingSocket) {
                 newSocket.onopen = () => {
                     statusText.textContent = "Reconnected";
                     statusIndicator.classList.add('connected');
-                    socket = newSocket; // Update the reference so sendBtn uses the new socket
+                    socket = newSocket;
                     setupSocketEvents(newSocket);
                 };
                 newSocket.onerror = activeSocket.onclose;
@@ -374,7 +402,64 @@ function initSanctuary(existingSocket) {
 
     // ── UI Listeners ───────────────────────────────────────
     if (sendBtn) sendBtn.addEventListener('click', handleSend);
-    // SOS is handled by modal IIFE event delegation at the top of this file
+
+    // ── Voice Notes (Microphone) Logic ──
+    const micBtn = document.getElementById('mic-btn');
+    let mediaRecorder;
+    let audioChunks = [];
+    
+    if (micBtn) {
+        micBtn.addEventListener('mousedown', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    audioChunks = [];
+                    
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = () => {
+                        const base64Audio = reader.result.split(',')[1];
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: "audio",
+                                audio: base64Audio
+                            }));
+                        }
+                    };
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                audioChunks = [];
+                mediaRecorder.start();
+                micBtn.classList.add('recording');
+                statusText.textContent = "Recording...";
+            } catch (err) {
+                console.error("Mic access denied or error:", err);
+                alert("Microphone access is required for voice notes.");
+            }
+        });
+
+        const stopRecording = () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                micBtn.classList.remove('recording');
+                statusText.textContent = "Connected to Safe Zone";
+            }
+        };
+        micBtn.addEventListener('mouseup', stopRecording);
+        micBtn.addEventListener('mouseleave', stopRecording);
+        
+        micBtn.addEventListener('touchstart', (e) => { e.preventDefault(); micBtn.dispatchEvent(new Event('mousedown')); });
+        micBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
+        micBtn.addEventListener('touchcancel', stopRecording);
+    }
 
     input.addEventListener('input', function () {
         this.style.height = 'auto';

@@ -897,8 +897,49 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = None):
                                 correction
                             )
                         continue
+                        
+                    if cmd.get("type") == "audio":
+                        import base64, tempfile, os
+                        audio_b64 = cmd.get("audio")
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+                            tmp.write(base64.b64decode(audio_b64))
+                            tmp_path = tmp.name
+                        
+                        try:
+                            await manager.send_system_msg(session_id, "Transcribing voice note...")
+                            with open(tmp_path, "rb") as f:
+                                transcription = groq_client.audio.transcriptions.create(
+                                    file=("audio.webm", f.read()),
+                                    model="whisper-large-v3-turbo"
+                                )
+                                data = transcription.text
+                                # Feedback to the user what was heard
+                                await manager.send_system_msg(session_id, f"🎤 You: {data}")
+                        except Exception as e:
+                            logger.error(f"Whisper API error: {e}")
+                            await manager.send_system_msg(session_id, "System Alert: Could not transcribe audio.")
+                            os.remove(tmp_path)
+                            continue
+                        os.remove(tmp_path)
+                        # Let `data` fall through to text processing
                 except:
                     pass
+
+            # --- JOURNAL MODE ---
+            if data.strip().lower() == "/journal":
+                manager.user_data[session_id]["journal_mode"] = True
+                if session_id in manager.matches:
+                    await manager.send_system_msg(session_id, "You cannot enter Journal Mode while talking to a peer.")
+                    manager.user_data[session_id]["journal_mode"] = False
+                else:
+                    manager.ai_sessions.add(session_id)
+                    await manager.send_system_msg(session_id, "📖 Journal Mode activated. Senti is just listening. Take all the time you need. Type '/done' when finished.")
+                continue
+                
+            if data.strip().lower() == "/done" and manager.user_data[session_id].get("journal_mode"):
+                manager.user_data[session_id]["journal_mode"] = False
+                await manager.send_system_msg(session_id, "📖 Journal Mode closed. Your thoughts are safe here. Senti is back to conversation mode.")
+                continue
 
             # --- THE SAFETY SHIELD ---
             safe, reason = is_safe_local(data)
@@ -917,10 +958,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = None):
 
             # Handle AI Nudge Trigger
             if data == "__TRIGGER_AI_NUDGE__":
-                if session_id in manager.ai_sessions:
+                if session_id in manager.ai_sessions and not manager.user_data[session_id].get("journal_mode"):
                     await manager.handle_ai_chat(session_id, "", is_nudge=True)
                 continue
             
+            # If in Journal Mode, just silently acknowledge
+            if manager.user_data[session_id].get("journal_mode"):
+                # Optionally send a very quiet acknowledgement if they type a lot, or just do nothing.
+                continue
+
             await manager.relay_message(session_id, data)
                 
     except WebSocketDisconnect:
