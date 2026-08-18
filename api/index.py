@@ -475,7 +475,7 @@ class ConnectionManager:
                 "timestamp": str(datetime.datetime.now())
             })
 
-    async def handle_ai_chat(self, session_id: str, message: str, is_nudge: bool = False, depth: float = 0.0):
+    async def handle_ai_chat(self, session_id: str, message: str, is_nudge: bool = False, depth: float = 0.0, senti_failsafe: bool = False):
         """
         Intent-aware AI response pipeline:
         1. Thinker analyzes intent (social / validation / support / crisis)
@@ -508,7 +508,23 @@ class ConnectionManager:
             negation_note = "(sentiment FLIPPED — read message as opposite)" if negation_count % 2 == 1 else ""
 
             # 3. Intent-Aware Prompt Building
-            if is_nudge:
+            if senti_failsafe:
+                # User typed "senti" while in a P2P session — they needed to escape.
+                # Sentinel opens with empathy, NOT a generic greeting.
+                region = self.user_data.get(session_id, {}).get("county", "Kenya")
+                prompt = (
+                    f"{SENTINEL_FINE_TUNE_PROMPT}\n\n"
+                    f"CONTEXT: The user was in a live peer-to-peer chat session on e-motions and typed 'senti' "
+                    f"to immediately transfer to you. This is a safety failsafe — it means they were feeling "
+                    f"uncomfortable, overwhelmed, or unsafe in that peer conversation. "
+                    f"DO NOT ask them why they used it — that might feel like an interrogation. "
+                    f"Instead, gently acknowledge that they came to you, make them feel immediately safe and "
+                    f"welcomed, let them know they are not alone, and softly invite them to share whatever is on their mind at their own pace. "
+                    f"Be warm, calm, and deeply reassuring. One short paragraph is enough — no lists.\n\n"
+                    f"User in {region}: [arrived via Senti failsafe]"
+                )
+
+            elif is_nudge:
                 prompt = (
                     f"{SENTINEL_FINE_TUNE_PROMPT}\n\nUSER PREFERENCES: {long_term_prefs}\n\n"
                     f"Recent Chat:\n{formatted_history}\n"
@@ -618,6 +634,44 @@ class ConnectionManager:
         if sender_id in self.user_data:
             self.user_data[sender_id]["depth"] = max(self.user_data[sender_id]["depth"], depth)
             self.user_data[sender_id]["last_msg"] = message
+
+        # ── SENTI FAILSAFE ──────────────────────────────────────────────────
+        # If the user types "senti" (case-insensitive) at any point while paired
+        # with a human peer, immediately transfer them to Sentinel AI.
+        if message.strip().lower() == "senti" and sender_id in self.matches:
+            peer_id = self.matches[sender_id]
+
+            # Silently notify the peer that the session has ended
+            if peer_id in self.active_connections:
+                await self.send_system_msg(
+                    peer_id,
+                    "Your peer has stepped away from the conversation. Take care of yourself 💛"
+                )
+            # Unpair both sides
+            self.matches.pop(sender_id, None)
+            self.matches.pop(peer_id, None)
+            # Peer goes back to AI pool
+            self.ai_sessions.add(peer_id)
+            await self.send_system_msg(
+                peer_id,
+                "Sentinel AI has gently stepped in to listen."
+            )
+
+            # Move the requesting user to Sentinel AI
+            self.ai_sessions.add(sender_id)
+            await self.send_system_msg(
+                sender_id,
+                "You've been transferred to Sentinel AI. You are safe here. 🌱"
+            )
+            # Let Sentinel open with a warm, context-aware acknowledgement
+            await self.handle_ai_chat(
+                sender_id,
+                message,
+                depth=depth,
+                senti_failsafe=True
+            )
+            return
+        # ── END SENTI FAILSAFE ───────────────────────────────────────────────
 
         # Case 1: Peer Match exists
         if sender_id in self.matches:

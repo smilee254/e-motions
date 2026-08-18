@@ -62,8 +62,8 @@
                 <button class="gateway-btn" id="welcome-btn" aria-label="Enter the sanctuary">
                     Enter the Sanctuary
                 </button>
-                <button class="manual-btn" id="manual-btn" aria-label="Read our Community Guide">
-                    Read our Community Guide
+                <button class="manual-btn" id="manual-btn" aria-label="Read How to Use e-motions">
+                    📖 How to Use e-motions
                 </button>
             </div>
         </div>
@@ -75,16 +75,86 @@
     <div id="manual-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
         <div class="modal-paper">
             <div class="modal-header">
-                <h2 id="modal-title">Our Community Guide</h2>
-                <button class="modal-close" id="modal-close" aria-label="Close guide">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
+                <div class="modal-header-top">
+                    <span class="modal-badge">User Manual</span>
+                    <button class="modal-close" id="modal-close" aria-label="Close guide">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <h2 id="modal-title">How to use <strong>e-motions</strong></h2>
+                <p class="modal-subtitle">A quiet, safe space to share what's on your mind — here's everything you need to know.</p>
             </div>
             <div class="modal-body">
-                <div class="manual-section">
-                    <h3><span class="msec-icon">🌱</span> A Safe Space, Not a Clinic</h3>
-                    <p>e-motions is a warm space for peer connection. Sentinel, our AI guide, is here to listen and share wisdom, but it is <em>not</em> a substitute for professional therapy or medical care.</p>
+
+                <!-- ═══ WHAT IS E-MOTIONS ═══ -->
+                <div class="manual-section manual-section--intro">
+                    <h3><span class="msec-icon">🌱</span> What is e-motions?</h3>
+                    <p>e-motions is a <strong>peer-to-peer emotional support platform</strong> built for Kenyans. You can talk anonymously with a fellow traveler (real person) or with <strong>Sentinel</strong> — our warm AI companion — whenever no peers are available. No names, no accounts, total privacy.</p>
                 </div>
+
+                <!-- ═══ STEP-BY-STEP ═══ -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">🗺️</span> Step-by-Step Guide</h3>
+
+                    <div class="how-steps">
+                        <div class="how-step">
+                            <div class="step-number">1</div>
+                            <div class="step-body">
+                                <h4>Click <em>"Enter the Sanctuary"</em></h4>
+                                <p>Tap the button on the home screen. e-motions will quietly connect you to the network — no sign-up, no email, no passwords needed. Ever.</p>
+                            </div>
+                        </div>
+
+                        <div class="how-step">
+                            <div class="step-number">2</div>
+                            <div class="step-body">
+                                <h4>You'll be matched with a peer or Sentinel</h4>
+                                <p>If another person is online nearby, you'll be connected to them anonymously. If no one is available right now, <strong>Sentinel AI</strong> (call him Senti 😊) will hold space for you — warm, judgment-free, always present.</p>
+                            </div>
+                        </div>
+
+                        <div class="how-step">
+                            <div class="step-number">3</div>
+                            <div class="step-body">
+                                <h4>Share freely — at your own pace</h4>
+                                <p>Type whatever is on your mind into the text box at the bottom. There's no timer, no pressure. You can share a little or a lot. The chat is your space.</p>
+                            </div>
+                        </div>
+
+                        <div class="how-step">
+                            <div class="step-number">4</div>
+                            <div class="step-body">
+                                <h4>Rate Sentinel's responses</h4>
+                                <p>When Sentinel replies, you'll see a <strong>👍 / 👎</strong> button. Your feedback helps Sentinel grow and get better at supporting people like you. It takes one second and matters a lot.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ SENTI FAILSAFE ═══ -->
+                <div class="manual-section manual-section--failsafe">
+                    <h3><span class="msec-icon">🛡️</span> The "Senti" Safety Switch</h3>
+                    <p>Feeling overwhelmed or uncomfortable during a peer chat? <strong>You are never trapped.</strong> At any moment, simply type:</p>
+                    <div class="senti-keyword-demo">
+                        <span class="senti-word">senti</span>
+                        <span class="senti-desc">and press Enter / Send</span>
+                    </div>
+                    <p>You will be <strong>instantly</strong> and silently transferred to Sentinel AI. The peer will only see a gentle note that you've stepped away. Sentinel will immediately understand you were in a conversation that felt uncomfortable and will open with warmth and care — no questions asked, no judgment.</p>
+                    <p class="manual-tip">💡 <em>This works at any time, even mid-sentence. Your safety always comes first.</em></p>
+                </div>
+
+                <!-- ═══ TIPS ═══ -->
+                <div class="manual-section">
+                    <h3><span class="msec-icon">✨</span> Tips for the Best Experience</h3>
+                    <ul class="manual-tips-list">
+                        <li><strong>Be honest.</strong> The more you share, the more Sentinel and your peers can support you.</li>
+                        <li><strong>Be kind.</strong> The person on the other end is a real human going through their own journey. Kindness is mandatory here.</li>
+                        <li><strong>Use the dark/light toggle</strong> (top-right sun/moon icon) for a comfortable reading experience at any hour.</li>
+                        <li><strong>No phone numbers or personal info.</strong> The platform will gently remind you if you accidentally share private details.</li>
+                    </ul>
+                </div>
+
+                <!-- ═══ EMERGENCY ═══ -->
                 <div class="manual-section manual-section--crisis" id="sos-contacts-anchor">
                     <h3><span class="msec-icon">💛</span> Emergency Support</h3>
                     <p>If you are in immediate danger, feeling overwhelmed, or experiencing abuse, please reach out to these incredible human beings who are waiting to help you right now.</p>
@@ -105,14 +175,17 @@
                         </li>
                     </ul>
                 </div>
+
+                <!-- ═══ COMMUNITY RULES ═══ -->
                 <div class="manual-section">
-                    <h3><span class="msec-icon">🤝</span> Be Kind, Always</h3>
-                    <p>We protect this space fiercely. Kindness is mandatory. Hate, bullying, or deliberately hurting others will result in an immediate ban. We're here to hold each other up.</p>
+                    <h3><span class="msec-icon">🤝</span> Our One Rule</h3>
+                    <p>We protect this space fiercely. <strong>Kindness is mandatory.</strong> Hate speech, bullying, or deliberately hurting others will result in an immediate ban. We're here to hold each other up — not tear each other down.</p>
                 </div>
+
             </div>
             <div class="modal-footer">
                 <p>Built with love in Kenya. <strong>Tuko pamoja.</strong></p>
-                <button class="gateway-btn modal-accept-btn" id="modal-accept">I'm ready to enter</button>
+                <button class="gateway-btn modal-accept-btn" id="modal-accept">I understand — take me in 🌱</button>
             </div>
         </div>
     </div>
@@ -141,7 +214,7 @@
 
         <footer class="input-container">
             <div class="logic-meter" id="logic-meter"></div>
-            <textarea id="entry-input" placeholder="Type your thoughts here..." rows="1"></textarea>
+            <textarea id="entry-input" placeholder="Share what's on your mind... (type 'senti' anytime to talk to Sentinel AI)" rows="1"></textarea>
             <button id="send-btn" aria-label="Send message">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13"></line>
