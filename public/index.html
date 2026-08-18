@@ -236,23 +236,28 @@
     <!-- ═══════════════════════════════════════════════════ -->
     <div id="sanctuary-root" aria-hidden="true">
         <nav class="top-nav">
+            <!-- LEFT: Brand + utility icons -->
             <div class="nav-left">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" stroke-width="2"><path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 5.35786 8.35786 2 12.5 2C16.6421 2 20 5.35786 20 9.5C20 15.5 12 21.5 12 21.5Z"/></svg>
+                <svg class="brand-leaf" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" stroke-width="2"><path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 5.35786 8.35786 2 12.5 2C16.6421 2 20 5.35786 20 9.5C20 15.5 12 21.5 12 21.5Z"/></svg>
                 <span class="brand-text">e-motions</span>
-                <button id="quiet-btn" class="nav-icon-btn" aria-label="Toggle Quiet Mode" title="Quiet Mode">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                </button>
-                <button id="escape-btn" class="nav-icon-btn escape-btn" aria-label="Quick Escape" title="Quick Escape (Tap ESC 3 times)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                </button>
-            </div>
-            
-            <div class="status-indicator">
-                <span id="status-dot"></span>
-                <span id="status-text">Finding your space...</span>
             </div>
 
-            <button id="sos-btn" aria-label="Open emergency contacts">Emergency Connect</button>
+            <!-- CENTER: Connection status pill -->
+            <div class="status-indicator" id="status-indicator">
+                <span id="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+
+            <!-- RIGHT: Action buttons -->
+            <div class="nav-right">
+                <button id="quiet-btn" class="nav-icon-btn" aria-label="Toggle Quiet Mode" title="Quiet Mode">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                </button>
+                <button id="escape-btn" class="nav-icon-btn escape-btn" aria-label="Quick Escape" title="Quick Escape">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </button>
+                <button id="sos-btn" aria-label="Open emergency contacts">SOS</button>
+            </div>
         </nav>
 
         <main id="diary-feed">
