@@ -874,100 +874,95 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = None):
         while True:
             # Receive text from user
             data = await websocket.receive_text()
-            
-            # Handle JSON commands (Feedback, Ping)
+            sid = actual_session_id  # Always use the resolved session ID, never the raw query param
+
+            # Handle JSON commands (Feedback, Ping, Audio)
             if data.startswith("{"):
                 try:
                     import json
                     cmd = json.loads(data)
-                    
+
                     if cmd.get("type") == "ping":
-                        continue # Silently keep connection alive
-                        
+                        continue  # Silently keep connection alive
+
                     if cmd.get("type") == "feedback":
                         score = cmd.get("score", 0)
                         correction = cmd.get("correction")
-                        interaction = manager.user_data.get(session_id, {}).get("last_interaction")
+                        interaction = manager.user_data.get(sid, {}).get("last_interaction")
                         if interaction:
                             log_feedback(
-                                session_id,
+                                sid,
                                 interaction["query"],
                                 interaction["response"],
                                 score,
                                 correction
                             )
                         continue
-                        
+
                     if cmd.get("type") == "audio":
                         import base64, tempfile, os
                         audio_b64 = cmd.get("audio")
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
                             tmp.write(base64.b64decode(audio_b64))
                             tmp_path = tmp.name
-                        
+
                         try:
-                            await manager.send_system_msg(session_id, "Transcribing voice note...")
+                            await manager.send_system_msg(sid, "Transcribing voice note...")
                             with open(tmp_path, "rb") as f:
                                 transcription = groq_client.audio.transcriptions.create(
                                     file=("audio.webm", f.read()),
                                     model="whisper-large-v3-turbo"
                                 )
                                 data = transcription.text
-                                # Feedback to the user what was heard
-                                await manager.send_system_msg(session_id, f"🎤 You: {data}")
+                                await manager.send_system_msg(sid, f"🎤 You said: {data}")
                         except Exception as e:
                             logger.error(f"Whisper API error: {e}")
-                            await manager.send_system_msg(session_id, "System Alert: Could not transcribe audio.")
+                            await manager.send_system_msg(sid, "System Alert: Could not transcribe audio.")
                             os.remove(tmp_path)
                             continue
                         os.remove(tmp_path)
-                        # Let `data` fall through to text processing
-                except:
+                        # Let `data` fall through to normal text processing below
+                except Exception:
                     pass
 
-            # --- JOURNAL MODE ---
+            # --- JOURNAL MODE COMMANDS ---
             if data.strip().lower() == "/journal":
-                manager.user_data[session_id]["journal_mode"] = True
-                if session_id in manager.matches:
-                    await manager.send_system_msg(session_id, "You cannot enter Journal Mode while talking to a peer.")
-                    manager.user_data[session_id]["journal_mode"] = False
+                if sid in manager.matches:
+                    await manager.send_system_msg(sid, "You cannot enter Journal Mode while talking to a peer.")
                 else:
-                    manager.ai_sessions.add(session_id)
-                    await manager.send_system_msg(session_id, "📖 Journal Mode activated. Senti is just listening. Take all the time you need. Type '/done' when finished.")
+                    manager.user_data[sid]["journal_mode"] = True
+                    manager.ai_sessions.add(sid)
+                    await manager.send_system_msg(sid, "📖 Journal Mode activated. Senti is just listening. Take all the time you need. Type '/done' when finished.")
                 continue
-                
-            if data.strip().lower() == "/done" and manager.user_data[session_id].get("journal_mode"):
-                manager.user_data[session_id]["journal_mode"] = False
-                await manager.send_system_msg(session_id, "📖 Journal Mode closed. Your thoughts are safe here. Senti is back to conversation mode.")
+
+            if data.strip().lower() == "/done" and manager.user_data.get(sid, {}).get("journal_mode"):
+                manager.user_data[sid]["journal_mode"] = False
+                await manager.send_system_msg(sid, "📖 Journal Mode closed. Your thoughts are safe here. Senti is back to conversation mode.")
                 continue
 
             # --- THE SAFETY SHIELD ---
             safe, reason = is_safe_local(data)
-            
+
             if not safe:
-                await manager.send_system_msg(session_id, reason)
-                # PI/Doxing: -10, Violence/Harassment: -50
+                await manager.send_system_msg(sid, reason)
                 delta = -50 if "Safety Alert" in reason else -10
-                update_trust_score(session_id, delta)
-                
-                # Check if blacklisted
-                if get_trust_score(session_id) <= 0:
-                    await manager.send_system_msg(session_id, "System Alert: Your trust score has reached zero. Your session is now restricted.")
-                    break 
+                update_trust_score(sid, delta)
+                if get_trust_score(sid) <= 0:
+                    await manager.send_system_msg(sid, "System Alert: Your trust score has reached zero. Your session is now restricted.")
+                    break
                 continue
 
             # Handle AI Nudge Trigger
             if data == "__TRIGGER_AI_NUDGE__":
-                if session_id in manager.ai_sessions and not manager.user_data[session_id].get("journal_mode"):
-                    await manager.handle_ai_chat(session_id, "", is_nudge=True)
-                continue
-            
-            # If in Journal Mode, just silently acknowledge
-            if manager.user_data[session_id].get("journal_mode"):
-                # Optionally send a very quiet acknowledgement if they type a lot, or just do nothing.
+                if sid in manager.ai_sessions and not manager.user_data.get(sid, {}).get("journal_mode"):
+                    await manager.handle_ai_chat(sid, "", is_nudge=True)
                 continue
 
-            await manager.relay_message(session_id, data)
+            # If in Journal Mode, silently absorb the message
+            if manager.user_data.get(sid, {}).get("journal_mode"):
+                continue
+
+            await manager.relay_message(sid, data)
                 
     except WebSocketDisconnect:
         manager.disconnect(actual_session_id)
