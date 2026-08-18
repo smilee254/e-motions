@@ -717,7 +717,7 @@ class ConnectionManager:
                             messages=[{"role": "user", "content": prompt}],
                             model="openai/gpt-oss-120b",
                             temperature=0.89,
-                            max_completion_tokens=1024,
+                            max_completion_tokens=5000,
                             top_p=1,
                             reasoning_effort="high"
                         )
