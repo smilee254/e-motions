@@ -116,8 +116,15 @@ document.getElementById('welcome-btn').addEventListener('click', () => {
         BACKEND_WS_URL = 'wss://e-motions.onrender.com/ws';
     }
     
-    console.log("Connecting to Sanctuary at:", BACKEND_WS_URL);
-    gatewaySocket = new WebSocket(BACKEND_WS_URL);
+    // Resume session if one exists
+    let sessionId = sessionStorage.getItem('emotions-session-id');
+    let connectionUrl = BACKEND_WS_URL;
+    if (sessionId) {
+        connectionUrl += `?session_id=${sessionId}`;
+    }
+    
+    console.log("Connecting to Sanctuary at:", connectionUrl);
+    gatewaySocket = new WebSocket(connectionUrl);
 
     // SUCCESS — handshake confirmed → open the curtain
     gatewaySocket.onopen = () => {
@@ -314,6 +321,8 @@ function initSanctuary(existingSocket) {
             } else if (data.type === "metadata") {
                 if (data.key === "safe_exit_contact") {
                     safeExitContact = data.value;
+                } else if (data.key === "session_id") {
+                    sessionStorage.setItem('emotions-session-id', data.value);
                 }
             } else {
                 hideThinking();
@@ -333,7 +342,23 @@ function initSanctuary(existingSocket) {
             
             // Auto-reconnect after 3 seconds
             setTimeout(() => {
-                let newSocket = new WebSocket(BACKEND_WS_URL);
+                let sessionId = sessionStorage.getItem('emotions-session-id');
+                // We recreate the backend URL dynamically in case of full disconnects
+                let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                let host = window.location.host;
+                let reconnectUrl = `ws://${host}/ws`;
+                
+                if (host.includes('render.com')) {
+                    reconnectUrl = `${protocol}//${host}/ws`;
+                } else if (host !== 'localhost' && host !== '127.0.0.1') {
+                    reconnectUrl = 'wss://e-motions.onrender.com/ws';
+                }
+                
+                if (sessionId) {
+                    reconnectUrl += `?session_id=${sessionId}`;
+                }
+                
+                let newSocket = new WebSocket(reconnectUrl);
                 newSocket.onopen = () => {
                     statusText.textContent = "Reconnected";
                     statusIndicator.classList.add('connected');
