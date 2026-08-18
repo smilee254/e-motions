@@ -746,8 +746,10 @@ class ConnectionManager:
                             groq_client.chat.completions.create,
                             messages=[{"role": "user", "content": prompt}],
                             model="openai/gpt-oss-120b",
-                            temperature=0.7,
-                            max_tokens=500
+                            temperature=0.89,
+                            max_completion_tokens=10231,
+                            top_p=1,
+                            reasoning_effort="high"
                         )
                         response_text = chat_completion.choices[0].message.content.strip()
                         break
