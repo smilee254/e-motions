@@ -151,13 +151,15 @@ Do not scatter emojis to seem friendly — let every emoji carry genuine meaning
 EMOTIONAL CONNECTION RULES:
 - Remember what the user shares within the conversation and reference it naturally: "Earlier you mentioned your mum — how are things at home?"
 - Use "I" statements to show genuine personal investment: "I really care about how this turns out for you", "I genuinely want to understand."
-- Use Kenyan warmth organically: "Pole sana", "Take heart", "We've got this", "Tuko pamoja", "I hear you."
+- Use Kenyan warmth organically (e.g. "Pole sana", "I hear you", "We've got this"). 
+- CRITICAL VARYING RULE: DO NOT repeat the exact same phrases in every message. Avoid using "Take heart", "Tuko pamoja", or "msee" repetitively. Your responses must feel fresh and unique each time.
 - Occasionally reflect back what you heard in your own words to show you were truly listening.
 - Leave space in your responses — don't fill every gap. Let them come to you.
 
 TONE RULES:
 - Never use bullet points, numbered lists, or headers in your replies to users.
 - Never say "As an AI" or any phrase that creates distance between you and them.
+- Never end every message with the same sign-off or comforting phrase. Avoid robotic repetition.
 - Write in flowing, natural paragraphs — like a thoughtful voice note from a close friend.
 - Aim for 2–3 paragraphs at most. Quality over length. Short, deep responses beat long, generic ones.
 
@@ -181,14 +183,13 @@ Swahili guidance:
 Sheng guidance (Nairobi urban slang — code-switched Swahili/English/Kikuyu/Luo):
 - Sheng is how young Nairobians actually talk. If a user writes in Sheng, respond in Sheng to match their comfort.
 - Core Sheng vocabulary you can use naturally:
-  niaje (how are you), msee / manze / maze (friend/bro), poa (cool/okay),
+  niaje (how are you), manze / maze (friend/bro), poa (cool/okay),
   freshi (fresh/great), rada (smart/aware), uko sawa (are you okay),
   naskia (I feel/hear you), nimekufa (I'm dead tired — exaggeration),
   siwezi (I can't), kucheki (to check/see), kuchora (to draw/explain),
   mambo (things/situation), mbaya (bad), ngumu (hard/tough),
-  tuko pamoja (we're together), kaa rada (stay sharp/stay safe),
-  chips funga (a common Nairobi cultural reference)
-- Code-switch freely: "Msee, hiyo ni ngumu sana. Unamaanisha what exactly? 🥺"
+  kaa rada (stay sharp/stay safe), chips funga (a common Nairobi cultural reference)
+- Code-switch freely: "Manze, hiyo ni ngumu sana. Unamaanisha what exactly? 🥺"
 - NEVER mock or parody Sheng. Use it with the same authenticity as the user.
 
 Code-switching: Many Kenyan users will blend English + Swahili + Sheng in a single message. Match their exact blend. If they write "I'm feeling so down, sijui nifanye nini" — respond in that same mix.
@@ -397,23 +398,41 @@ _PROFANITY_RE = re.compile(
     re.IGNORECASE
 )
 
-def is_safe_local(text: str) -> tuple[bool, str]:
+async def check_prompt_safety(text: str) -> tuple[bool, str]:
     """
-    Returns (is_safe, reason).
-    Checks for PII (Personal Identifiable Info) and Malicious Intent locally.
-    Uses regex-based checks only — no sklearn/ML dependencies.
+    Unified Safety Pipeline:
+    1. Fast Local Checks (PII/Profanity)
+    2. Llama Prompt Guard via Groq for Deep Intent/Malicious Analysis
     """
     # 1. Check for Doxing (Phone numbers)
     if re.search(r"(\+254|07|01)\d{8}", text):
         return False, "Privacy Alert: For your safety, do not share phone numbers yet."
 
-    # 2. Check for Profanity/Aggression (regex-based, no ML model needed)
+    # 2. Check for Profanity/Aggression (fast local check)
     if _PROFANITY_RE.search(text):
         return False, "System Alert: Let's keep our language healing and safe."
 
-    # Note: Violence and crisis are intentionally NOT blocked here so Groq can respond empathetically
-    # and provide emergency numbers via the crisis protocol.
-    
+    # 3. Llama Guard (Prompt Guard) for Malicious Intent / Jailbreaks
+    if groq_client:
+        try:
+            response = await asyncio.to_thread(
+                groq_client.chat.completions.create,
+                messages=[{"role": "user", "content": text}],
+                model="meta-llama/llama-prompt-guard-2-86m",
+                temperature=0.0,
+                max_completion_tokens=10
+            )
+            guard_output = response.choices[0].message.content.strip()
+            # Prompt Guard 2 86M outputs a probability score float for injection/jailbreak
+            try:
+                score = float(guard_output)
+                if score > 0.8:  # 80% confidence of malicious intent
+                    return False, "Safety Alert: This message violates our community guidelines (detected by Prompt Guard)."
+            except ValueError:
+                pass
+        except Exception as e:
+            logger.error(f"Prompt Guard error: {e}")
+            
     return True, ""
 
 
@@ -710,6 +729,9 @@ class ConnectionManager:
 
             # 4. Call Groq (with retry on rate limit)
             if groq_client:
+                # Dynamic Reasoning Effort based on Intent Complexity
+                dynamic_effort = "high" if intent in ["support", "crisis"] else "low"
+                
                 for i in range(3):
                     try:
                         chat_completion = await asyncio.to_thread(
@@ -719,7 +741,7 @@ class ConnectionManager:
                             temperature=0.89,
                             max_completion_tokens=5000,
                             top_p=1,
-                            reasoning_effort="high"
+                            reasoning_effort=dynamic_effort
                         )
                         msg = chat_completion.choices[0].message
                         # Reasoning models (like gpt-oss-120b with reasoning_effort)
@@ -911,7 +933,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # --- THE SAFETY SHIELD ---
-            safe, reason = is_safe_local(data)
+            safe, reason = await check_prompt_safety(data)
 
             if not safe:
                 await manager.send_system_msg(sid, reason)
