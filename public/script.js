@@ -2,7 +2,7 @@
    SANCTUARY MANUAL MODAL — open / close logic
    ═══════════════════════════════════════════════════════ */
 
-console.log("%c✨ e-motions is alive! heeeehehee ✨", "color: #C87961; font-size: 16px; font-weight: bold;");
+console.log("%c e-motions is active. ", "color: #C87961; font-size: 14px;");
 (function () {
     const themeToggleBtn = document.getElementById('theme-toggle');
     const manualBtn      = document.getElementById('manual-btn');
@@ -11,6 +11,17 @@ console.log("%c✨ e-motions is alive! heeeehehee ✨", "color: #C87961; font-si
     const modalAcceptBtn = document.getElementById('modal-accept');
     const escapeBtn      = document.getElementById('escape-btn');
     const quietBtn       = document.getElementById('quiet-btn');
+
+    const clearChatBtn = document.getElementById('clear-chat-btn');
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', () => {
+            const feed = document.getElementById('diary-feed');
+            if (feed) {
+                feed.innerHTML = '<div class="system-note">Chat history cleared. Share whatever is on your mind.</div>';
+            }
+        });
+    }
+
 
     // ── Quiet Mode Logic ──
     const initQuietMode = () => {
@@ -276,7 +287,7 @@ function initSanctuary(existingSocket) {
             actions.className = 'msg-actions';
             
             const upBtn = document.createElement('button');
-            upBtn.innerHTML = '👍';
+            upBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>';
             upBtn.title = 'Helpful';
             upBtn.onclick = () => {
                 sendFeedback(1);
@@ -284,7 +295,7 @@ function initSanctuary(existingSocket) {
             };
 
             const downBtn = document.createElement('button');
-            downBtn.innerHTML = '👎';
+            downBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"></path></svg>';
             downBtn.title = 'Not helpful';
             downBtn.onclick = () => {
                 const correction = prompt("How can I improve? (Optional)");

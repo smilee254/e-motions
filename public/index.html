@@ -1,214 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>e-motions | Karibu</title>
-    <meta name="description" content="e-motions — a safe, warm space for mental health peer support. You are never alone here.">
+    <title>e-motions</title>
+    <meta name="description" content="e-motions — a private space for mental health peer support.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400;1,500&family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-    <!-- Ambient Organic Blobs for Visual Appeal -->
-    <div class="ambient-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-    </div>
-
     <!-- Theme Toggle -->
     <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle Dark/Light Theme">
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
     </button>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!--  GATEWAY LANDING — Warm and Grounded                 -->
-    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- GATEWAY LANDING -->
     <section class="showcase" id="showcase">
         <div class="gateway-content" id="gateway-content">
-            <div class="header-illustration">
-                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 5.35786 8.35786 2 12.5 2C16.6421 2 20 5.35786 20 9.5C20 15.5 12 21.5 12 21.5Z" fill="var(--accent-terra)" fill-opacity="0.3"/>
-                    <path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 7.6975 5.63351 6.04877 6.67804 4.75C8.0315 7.15 10 9 12 9C14 9 15.9685 7.15 17.322 4.75C18.3665 6.04877 19 7.6975 19 9.5C19 15.5 12 21.5 12 21.5Z" fill="var(--accent-sage)" fill-opacity="0.6"/>
-                </svg>
-            </div>
-
-            <h1 class="gateway-wordmark">Karibu, you are safe here.</h1>
+            <h1 class="gateway-wordmark">e-motions</h1>
             <p class="gateway-tagline">
-                Life can feel heavy sometimes. <strong>e-motions</strong> is a calm, quiet space built for Kenyans to share, listen, and find peer support. We're glad you found us.
+                A private space for Kenyans to share, listen, and find peer support.
             </p>
 
             <div class="safety-trio" role="list" aria-label="Essential safety notices">
                 <div class="trio-pill" role="listitem">
-                    <span class="trio-icon">🌱</span>
-                    <span>Hi, I'm <strong>Sentinel</strong> (but my friends call me Senti 😂). I'm a friendly AI listener, not a medical doctor.</span>
-                </div>
-                <div class="trio-pill trio-pill--crisis" role="listitem">
-                    <span class="trio-icon">💛</span>
-                    <span>If things feel too dark, tap the <strong>Emergency Connect</strong> button first.</span>
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 2a10 10 0 1 0 10 10H12V2Z"></path><path d="M12 12 2.1 12"></path><path d="M12 12 19.1 4.9"></path></svg>
+                    <span><strong>Sentinel</strong> is an AI listener, not a medical professional.</span>
                 </div>
                 <div class="trio-pill" role="listitem">
-                    <span class="trio-icon">🔒</span>
-                    <span><strong>Total privacy.</strong> No names, no tracking. Just honest sharing.</span>
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    <span>For immediate help, tap <strong>Crisis Resources</strong>.</span>
+                </div>
+                <div class="trio-pill" role="listitem">
+                    <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <span><strong>Total privacy.</strong> No names, no tracking.</span>
                 </div>
             </div>
 
             <div class="gateway-cta-row">
                 <button class="gateway-btn" id="welcome-btn" aria-label="Enter the sanctuary">
-                    Enter the Sanctuary
+                    Enter
                 </button>
                 <button class="manual-btn" id="manual-btn" aria-label="Read How to Use e-motions">
-                    📖 How to Use e-motions
+                    How to Use e-motions
                 </button>
             </div>
         </div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!--  COMMUNITY GUIDE MODAL                                          -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- COMMUNITY GUIDE MODAL -->
     <div id="manual-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
         <div class="modal-paper">
             <div class="modal-header">
                 <div class="modal-header-top">
-                    <span class="modal-badge">User Manual</span>
+                    <h2 id="modal-title">How to use e-motions</h2>
                     <button class="modal-close" id="modal-close" aria-label="Close guide">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                 </div>
-                <h2 id="modal-title">How to use <strong>e-motions</strong></h2>
-                <p class="modal-subtitle">A quiet, safe space to share what's on your mind — here's everything you need to know.</p>
+                <p class="modal-subtitle">A private space to share what's on your mind.</p>
             </div>
             <div class="modal-body">
-
-                <!-- ═══ WHAT IS E-MOTIONS ═══ -->
                 <div class="manual-section manual-section--intro">
-                    <h3><span class="msec-icon">🌱</span> What is e-motions?</h3>
-                    <p>e-motions is a <strong>peer-to-peer emotional support platform</strong> built for Kenyans. You can talk anonymously with a fellow traveler (real person) or with <strong>Sentinel</strong> — our warm AI companion — whenever no peers are available. No names, no accounts, total privacy.</p>
+                    <h3>About e-motions</h3>
+                    <p>e-motions is a peer-to-peer support platform for Kenyans. You can talk anonymously with another person, or with Sentinel, our AI listener, when no peers are available. We do not use accounts, and we do not track you.</p>
                 </div>
 
-                <!-- ═══ STEP-BY-STEP ═══ -->
                 <div class="manual-section">
-                    <h3><span class="msec-icon">🗺️</span> Step-by-Step Guide</h3>
-
+                    <h3>Guide</h3>
                     <div class="how-steps">
                         <div class="how-step">
-                            <div class="step-number">1</div>
                             <div class="step-body">
-                                <h4>Click <em>"Enter the Sanctuary"</em></h4>
-                                <p>Tap the button on the home screen. e-motions will quietly connect you to the network — no sign-up, no email, no passwords needed. Ever.</p>
+                                <h4>Enter</h4>
+                                <p>Tap the enter button. e-motions connects you to the network without requiring any sign-up or personal information.</p>
                             </div>
                         </div>
 
                         <div class="how-step">
-                            <div class="step-number">2</div>
                             <div class="step-body">
-                                <h4>You'll be matched with a peer or Sentinel</h4>
-                                <p>If another person is online nearby, you'll be connected to them anonymously. If no one is available right now, <strong>Sentinel AI</strong> (call him Senti 😊) will hold space for you — warm, judgment-free, always present.</p>
+                                <h4>Match with a peer or Sentinel</h4>
+                                <p>If another person is online, you will connect to them anonymously. If not, Sentinel AI will listen and respond without judgment.</p>
                             </div>
                         </div>
 
                         <div class="how-step">
-                            <div class="step-number">3</div>
                             <div class="step-body">
-                                <h4>Share freely — at your own pace</h4>
-                                <p>Type whatever is on your mind into the text box at the bottom. There's no timer, no pressure. You can share a little or a lot. The chat is your space.</p>
-                            </div>
-                        </div>
-
-                        <div class="how-step">
-                            <div class="step-number">4</div>
-                            <div class="step-body">
-                                <h4>Rate Sentinel's responses</h4>
-                                <p>When Sentinel replies, you'll see a <strong>👍 / 👎</strong> button. Your feedback helps Sentinel grow and get better at supporting people like you. It takes one second and matters a lot.</p>
+                                <h4>Share</h4>
+                                <p>Type whatever is on your mind into the text box. There are no timers or requirements.</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- ═══ SENTI FAILSAFE ═══ -->
                 <div class="manual-section manual-section--failsafe">
-                    <h3><span class="msec-icon">🛡️</span> The "Senti" Safety Switch</h3>
-                    <p>Feeling overwhelmed or uncomfortable during a peer chat? <strong>You are never trapped.</strong> At any moment, simply type:</p>
+                    <h3>AI Transfer</h3>
+                    <p>If you feel uncomfortable during a peer chat, you can transfer to Sentinel AI at any time.</p>
                     <div class="senti-keyword-demo">
                         <span class="senti-word">senti</span>
-                        <span class="senti-desc">and press Enter / Send</span>
+                        <span class="senti-desc">Type this word and press Enter</span>
                     </div>
-                    <p>You will be <strong>instantly</strong> and silently transferred to Sentinel AI. The peer will only see a gentle note that you've stepped away. Sentinel will immediately understand you were in a conversation that felt uncomfortable and will open with warmth and care — no questions asked, no judgment.</p>
-                    <p class="manual-tip">💡 <em>This works at any time, even mid-sentence. Your safety always comes first.</em></p>
+                    <p>You will be silently transferred to Sentinel AI. The peer will see a note that you have left the chat. Sentinel will not ask questions.</p>
                 </div>
 
-                <!-- ═══ QUICK ESCAPE ═══ -->
                 <div class="manual-section manual-section--crisis">
-                    <h3><span class="msec-icon">🚪</span> Quick Escape Panic Button</h3>
-                    <p>If you are in an unsafe physical environment and someone approaches while you are chatting, you can instantly hide the screen.</p>
+                    <h3>Quick Escape</h3>
+                    <p>If you need to hide the screen immediately:</p>
                     <ul class="manual-tips-list">
-                        <li>Tap the <strong>door icon</strong> in the top left corner, OR</li>
-                        <li>Press the <strong>Escape (ESC) key 3 times</strong> quickly on your keyboard.</li>
+                        <li>Tap the door icon in the top left corner, OR</li>
+                        <li>Press the Escape (ESC) key 3 times quickly.</li>
                     </ul>
-                    <p>You will be immediately redirected to Google, leaving no trace of the chat behind.</p>
+                    <p>You will be redirected to Google, leaving no trace of the chat.</p>
                 </div>
 
-                <!-- ═══ SANCTUARY FEATURES ═══ -->
                 <div class="manual-section">
-                    <h3><span class="msec-icon">🛠️</span> Sanctuary Features</h3>
+                    <h3>Features</h3>
                     <div class="how-steps">
                         <div class="how-step">
-                            <div class="step-number">🎤</div>
                             <div class="step-body">
-                                <h4>Anonymous Voice Notes</h4>
-                                <p>Too tired to type? Hold the <strong>microphone icon</strong> next to the text box to record a voice note. The system instantly translates your voice into text and destroys the audio, keeping you completely anonymous.</p>
+                                <h4>Voice Notes</h4>
+                                <p>Hold the microphone icon to record a voice note. The system translates your voice into text and deletes the audio.</p>
                             </div>
                         </div>
 
                         <div class="how-step">
-                            <div class="step-number">👁️</div>
                             <div class="step-body">
                                 <h4>Quiet Mode</h4>
-                                <p>If you're feeling sensory overload, tap the <strong>eye icon</strong> in the top left. This dims the interface to a deep, dark calm and stops all moving animations.</p>
+                                <p>Tap the eye icon in the top left to dim the interface.</p>
                             </div>
                         </div>
 
                         <div class="how-step">
-                            <div class="step-number">📖</div>
                             <div class="step-body">
-                                <h4>Private Journal Mode</h4>
-                                <p>If you just want to dump your thoughts without Senti trying to give advice, type <strong>/journal</strong>. Senti will become a silent listener. When you are finished, type <strong>/done</strong>.</p>
+                                <h4>Journal Mode</h4>
+                                <p>Type <strong>/journal</strong> to make Sentinel a silent listener. Type <strong>/done</strong> when finished.</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- ═══ TIPS ═══ -->
-                <div class="manual-section">
-                    <h3><span class="msec-icon">✨</span> Tips for the Best Experience</h3>
-                    <ul class="manual-tips-list">
-                        <li><strong>Be honest.</strong> The more you share, the more Sentinel and your peers can support you.</li>
-                        <li><strong>Be kind.</strong> The person on the other end is a real human going through their own journey. Kindness is mandatory here.</li>
-                        <li><strong>Use the dark/light toggle</strong> (top-right sun/moon icon) for a comfortable reading experience at any hour.</li>
-                        <li><strong>No phone numbers or personal info.</strong> The platform will gently remind you if you accidentally share private details.</li>
-                    </ul>
-                </div>
-
-                <!-- ═══ EMERGENCY ═══ -->
                 <div class="manual-section manual-section--crisis" id="sos-contacts-anchor">
-                    <h3><span class="msec-icon">💛</span> Emergency Support</h3>
-                    <p>If you are in immediate danger, feeling overwhelmed, or experiencing abuse, please reach out to these incredible human beings who are waiting to help you right now.</p>
+                    <h3>Crisis Resources</h3>
+                    <p>If you are in immediate danger, feeling overwhelmed, or experiencing abuse, please contact these resources.</p>
                     <ul class="emergency-contacts">
                         <li>
-                            <span class="ec-badge ec-badge--red">24/7 Support</span>
+                            <span class="ec-badge">24/7 Support</span>
                             <span class="ec-detail">
                                 <strong>Kenya Red Cross</strong>
                                 <a href="tel:1199">1199</a>
                             </span>
                         </li>
                         <li>
-                            <span class="ec-badge ec-badge--purple">GBV Crisis</span>
+                            <span class="ec-badge">GBV Crisis</span>
                             <span class="ec-detail">
                                 <strong>Gender Violence Recovery Centre</strong>
                                 <a href="tel:1195">1195</a>
@@ -216,52 +161,41 @@
                         </li>
                     </ul>
                 </div>
-
-                <!-- ═══ COMMUNITY RULES ═══ -->
-                <div class="manual-section">
-                    <h3><span class="msec-icon">🤝</span> Our One Rule</h3>
-                    <p>We protect this space fiercely. <strong>Kindness is mandatory.</strong> Hate speech, bullying, or deliberately hurting others will result in an immediate ban. We're here to hold each other up — not tear each other down.</p>
-                </div>
-
             </div>
             <div class="modal-footer">
-                <p>Built with love in Kenya. <strong>Tuko pamoja.</strong></p>
-                <button class="gateway-btn modal-accept-btn" id="modal-accept">I understand — take me in 🌱</button>
+                <button class="gateway-btn modal-accept-btn" id="modal-accept">Acknowledge</button>
             </div>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════ -->
-    <!--  CHAT SANCTUARY                                     -->
-    <!-- ═══════════════════════════════════════════════════ -->
+    <!-- CHAT SANCTUARY -->
     <div id="sanctuary-root" aria-hidden="true">
         <nav class="top-nav">
-            <!-- LEFT: Brand + utility icons -->
             <div class="nav-left">
-                <svg class="brand-leaf" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" stroke-width="2"><path d="M12 21.5C12 21.5 5 15.5 5 9.5C5 5.35786 8.35786 2 12.5 2C16.6421 2 20 5.35786 20 9.5C20 15.5 12 21.5 12 21.5Z"/></svg>
                 <span class="brand-text">e-motions</span>
             </div>
 
-            <!-- CENTER: Connection status pill -->
             <div class="status-indicator" id="status-indicator">
                 <span id="status-dot"></span>
                 <span id="status-text">Connecting...</span>
             </div>
 
-            <!-- RIGHT: Action buttons -->
             <div class="nav-right">
+                <button id="clear-chat-btn" class="nav-icon-btn" aria-label="Clear Chat" title="Clear Chat">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
                 <button id="quiet-btn" class="nav-icon-btn" aria-label="Toggle Quiet Mode" title="Quiet Mode">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                 </button>
                 <button id="escape-btn" class="nav-icon-btn escape-btn" aria-label="Quick Escape" title="Quick Escape">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 </button>
-                <button id="sos-btn" aria-label="Open emergency contacts">SOS</button>
+                <button id="sos-btn" aria-label="Open crisis resources">Crisis Resources</button>
             </div>
         </nav>
 
         <main id="diary-feed">
-            <div class="system-note">This is your private diary. Share whatever is on your mind today.</div>
+            <div class="system-note">Share whatever is on your mind today.</div>
         </main>
 
         <footer class="input-container">
@@ -269,7 +203,7 @@
             <button id="mic-btn" class="input-icon-btn" aria-label="Record Voice Note" title="Hold to record">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
             </button>
-            <textarea id="entry-input" placeholder="Type here... (type 'senti' for AI, or '/journal' for quiet reflection)" rows="1"></textarea>
+            <textarea id="entry-input" placeholder="Type here..." rows="1"></textarea>
             <button id="send-btn" aria-label="Send message">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="22" y1="2" x2="11" y2="13"></line>

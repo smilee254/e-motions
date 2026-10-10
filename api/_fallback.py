@@ -76,29 +76,29 @@ _SPANISH_MARKERS = [
 ]
 
 SWAHILI_FALLBACKS = [
-    "Nakusikia. Chukua muda wako — unataka kuzungumza nini leo? 💛",
-    "Pole sana kwa hilo. Uko salama hapa. Niambie zaidi. 🌱",
-    "Najua ni ngumu. Lakini uko hapa sasa, na hiyo ni ujasiri mkubwa. 🫂",
-    "Nakusikia kabisa. Endelea — niko hapa nasikiliza. 💛",
+    "Nakusikia. Chukua muda wako — unataka kuzungumza nini leo?",
+    "Pole sana kwa hilo. Uko salama hapa. Niambie zaidi.",
+    "Najua ni ngumu. Lakini uko hapa sasa, na hiyo ni ujasiri mkubwa.",
+    "Nakusikia kabisa. Endelea — niko hapa nasikiliza.",
 ]
 
 SHENG_FALLBACKS = [
-    "Naskia msee. Relax, uko safe hapa — niambie mambo yako. 💛",
-    "Pole sana manze. Hii ni space yako — zungumza tu. 🌱",
-    "Niko hapa kukusikia. Mambo ni mazito, lakini tuko pamoja. 🫂",
-    "Rada msee — uko sawa? Niambie what's going on. 💛",
+    "Naskia msee. Relax, uko safe hapa — niambie mambo yako.",
+    "Pole sana manze. Hii ni space yako — zungumza tu.",
+    "Niko hapa kukusikia. Mambo ni mazito, lakini tuko pamoja.",
+    "Rada msee — uko sawa? Niambie what's going on.",
 ]
 
 FRENCH_FALLBACKS = [
-    "Je t'écoute. Prends ton temps — qu'est-ce qui te préoccupe aujourd'hui ? 💛",
-    "Je suis vraiment désolé d'entendre ça. Tu es en sécurité ici. Dis-m'en plus. 🌱",
-    "Je sais que c'est difficile. Mais tu es ici maintenant, et c'est très courageux. 🫂",
+    "Je t'écoute. Prends ton temps — qu'est-ce qui te préoccupe aujourd'hui ?",
+    "Je suis vraiment désolé d'entendre ça. Tu es en sécurité ici. Dis-m'en plus.",
+    "Je sais que c'est difficile. Mais tu es ici maintenant, et c'est très courageux.",
 ]
 
 SPANISH_FALLBACKS = [
-    "Te escucho. Tómate tu tiempo, ¿qué tienes en mente hoy? 💛",
-    "Siento mucho que pases por esto. Estás en un lugar seguro. Cuéntame más. 🌱",
-    "Sé que es difícil. Pero estás aquí ahora, y eso requiere mucho valor. 🫂",
+    "Te escucho. Tómate tu tiempo, ¿qué tienes en mente hoy?",
+    "Siento mucho que pases por esto. Estás en un lugar seguro. Cuéntame más.",
+    "Sé que es difícil. Pero estás aquí ahora, y eso requiere mucho valor.",
 ]
 
 def _detect_language(user_lower: str) -> str:
