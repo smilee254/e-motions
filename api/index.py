@@ -12,7 +12,6 @@ import asyncio
 import random
 from contextlib import asynccontextmanager
 
-import geoip2.database
 from google import genai
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
@@ -81,26 +80,9 @@ if QDRANT_URL and QDRANT_API_KEY:
 else:
     logger.warning("QDRANT_URL/QDRANT_API_KEY not set. Using SQL-only retrieval.")
 
-# --- Local GeoIP Configuration ---
-# Check multiple possible paths for the database
-GEOIP_SEARCH_PATHS = [
-    os.path.join("api", "dbip-city-lite.mmdb"),
-    "dbip-city-lite.mmdb",
-    os.path.join(os.path.dirname(__file__), "dbip-city-lite.mmdb")
-]
-
-geoip_reader = None
-for path in GEOIP_SEARCH_PATHS:
-    if os.path.exists(path):
-        try:
-            geoip_reader = geoip2.database.Reader(path)
-            logger.info(f"Loaded GeoIP database from: {path}")
-            break
-        except Exception as e:
-            logger.error(f"Error loading GeoIP from {path}: {e}")
-
-if not geoip_reader:
-    logger.warning("No GeoIP database found. Location lookups will use fallbacks.")
+# --- GeoIP Configuration ---
+# Uses ip-api.com (free, no key, ~50ms, cached in-memory per IP)
+_geo_cache: dict = {}
 
 # --- Sentinel System Instruction (Fine-Tuned for Expert Data + Human Tone) ---
 SENTINEL_FINE_TUNE_PROMPT = """
@@ -370,25 +352,40 @@ def fetch_expert_advice(keywords: List[str], message: str) -> str:
 async def get_user_geo(ip: str):
     """
     Returns (city, region, country).
-    Uses local DB-IP database for zero-latency lookups.
+    Uses ip-api.com (free, no API key, ~50ms) with an in-memory per-IP cache.
+    Falls back to Nairobi defaults for local/unknown IPs or on error.
     """
-    if not geoip_reader or ip in ["127.0.0.1", "localhost", "::1"]:
-        # Mock data for local development
-        return "Ruiru", "Kiambu", "Kenya"
-    
+    _FALLBACK = ("Nairobi", "Nairobi", "Kenya")
+
+    # Return dev fallback for local addresses
+    if not ip or ip in ("127.0.0.1", "localhost", "::1", ""):
+        return ("Ruiru", "Kiambu", "Kenya")
+
+    # Cache hit — avoid repeat API calls for the same IP
+    if ip in _geo_cache:
+        return _geo_cache[ip]
+
     try:
-        if not geoip_reader:
-            return "Nairobi", "Nairobi", "Kenya"
-            
-        # Local lookup is synchronous but extremely fast (0.01ms)
-        response = geoip_reader.city(ip)
-        city = getattr(response.city, 'name', "Nairobi") or "Nairobi"
-        region = getattr(response.subdivisions.most_specific, 'name', "Nairobi") or "Nairobi"
-        country = getattr(response.country, 'name', "Kenya") or "Kenya"
-        return city, region, country
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(
+                f"http://ip-api.com/json/{ip}",
+                params={"fields": "city,regionName,country,status"},
+            )
+            data = r.json()
+            if data.get("status") == "success":
+                result = (
+                    data.get("city") or _FALLBACK[0],
+                    data.get("regionName") or _FALLBACK[1],
+                    data.get("country") or _FALLBACK[2],
+                )
+                _geo_cache[ip] = result
+                return result
     except Exception as e:
-        logger.error(f"Local GeoIP lookup error: {e}")
-        return "Nairobi", "Nairobi", "Kenya"
+        logger.warning(f"ip-api.com lookup failed for {ip}: {e}")
+
+    return _FALLBACK
+
 
 # Regex-based profanity filter (replaces sklearn alt-profanity-check — saves ~80MB RAM)
 # Covers common English + Kiswahili offensive terms in Kenyan context
@@ -441,10 +438,10 @@ async def lifespan(app: FastAPI):
     # Startup: Qdrant Cloud is the retrieval backend — no local model loading needed
     logger.info("Sentinel starting up. Qdrant Cloud connected for expert retrieval.")
     yield
-    # Shutdown: Clean up resources
+    # Shutdown: Clean up in-memory geo cache
+    _geo_cache.clear()
     logger.info("Sentinel entering hibernation.")
-    if geoip_reader:
-        geoip_reader.close()
+
 
 app = FastAPI(title="e-motions API", lifespan=lifespan)
 
@@ -471,8 +468,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_geolocation(request: Request, call_next):
-    # Skip geolocation for static files if performance is a concern
-    if request.url.path.startswith("/static") or "." in request.url.path.split("/")[-1]:
+    # Skip geolocation for static files and the health check
+    if request.url.path in ("/health",) or request.url.path.startswith("/static") or "." in request.url.path.split("/")[-1]:
         return await call_next(request)
 
     client_ip = request.headers.get("x-forwarded-for") or request.client.host
@@ -490,6 +487,15 @@ async def add_geolocation(request: Request, call_next):
     }
     
     return await call_next(request)
+
+@app.get("/health")
+async def health_check():
+    """
+    Lightweight liveness endpoint.
+    Point an uptime pinger (e.g. UptimeRobot) at /health every 5 minutes
+    to keep the Render dyno warm and eliminate cold boot delays.
+    """
+    return {"status": "ok", "service": "e-motions-sentinel"}
 
 class ConnectionManager:
     def __init__(self):

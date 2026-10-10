@@ -7,7 +7,6 @@ pydantic
 pydantic-settings
 google-genai
 python-dotenv
-geoip2
 qdrant-client
 pyarrow
 groq
@@ -15,3 +14,4 @@ groq
 # faiss-cpu    — replaced by Qdrant Cloud (HTTP-based, no local ML needed)
 # pandas       — only needed in _build_brain.py / continue_transfer.py local scripts
 # sentence-transformers — PyTorch dep, 200-300MB RAM alone
+# geoip2       — replaced by ip-api.com HTTP call (removed 125MB dbip-city-lite.mmdb + ~10MB of C deps)

@@ -1,6 +1,28 @@
-api/
+# Local-only dev/build scripts — never deploy these
+api/_build_brain.py
+api/_upload_to_qdrant.py
+api/_upload_custom_qdrant.py
+api/_generate_scenarios.py
+api/continue_transfer.py
+api/groq_mental_health_demo.py
+api/_view_feedback.py
+api/expert_archive/
+
+# Large binary — replaced by ip-api.com HTTP call
+api/dbip-city-lite.mmdb
+*.mmdb
+
+# Python bytecode
+api/__pycache__/
+
+# Data dir (SQLite local dev DB only)
 data/
-*.py
-requirements.txt
-Procfile
+
+# Other local-only files
+*.py~
+get_models.py
+test_pg.py
+test_pg2.py
+test_groq_integration.py
 download_db.sh
+Procfile
