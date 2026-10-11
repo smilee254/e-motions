@@ -42,7 +42,7 @@ KNOWLEDGE_BASE = [
     {"input": "I feel like a burden", "reply": "It sounds like you're carrying a lot right now. Sharing isn't a burden; it's the first step to lightening the load."},
     {"input": "I can't sleep because of stress", "reply": "Nights can be the hardest when the world is quiet but your mind isn't. What's one thing you'd like to 'park' here so you can rest?"},
     {"input": "Nobody cares about me", "reply": "That is a heavy and painful feeling to hold. I am here, and I am listening. Tell me more about what's making you feel unseen."},
-    {"input": "I want to give up", "reply": "I hear how exhausted you are. It's okay to feel like you've reached your limit. I'm here to sit with you in that space for as long as you need."},
+    {"input": "I want to give up", "reply": "It is understandable to feel at your limit right now. What has brought you to this point?"},
     {"input": "Everything is falling apart", "reply": "When everything feels chaotic, it's hard to find a place to stand. Let's take it one small breath at a time. What's the very next thing in front of you?"}
 ]
 
@@ -76,14 +76,14 @@ _SPANISH_MARKERS = [
 ]
 
 SWAHILI_FALLBACKS = [
-    "Nakusikia. Chukua muda wako — unataka kuzungumza nini leo?",
+    "Chukua muda wako — unataka kuzungumza nini leo?",
     "Pole sana kwa hilo. Uko salama hapa. Niambie zaidi.",
     "Najua ni ngumu. Lakini uko hapa sasa, na hiyo ni ujasiri mkubwa.",
-    "Nakusikia kabisa. Endelea — niko hapa nasikiliza.",
+    "Endelea — niko hapa nasikiliza.",
 ]
 
 SHENG_FALLBACKS = [
-    "Naskia msee. Relax, uko safe hapa — niambie mambo yako.",
+    "Relax, uko safe hapa — niambie mambo yako.",
     "Pole sana manze. Hii ni space yako — zungumza tu.",
     "Niko hapa kukusikia. Mambo ni mazito, lakini tuko pamoja.",
     "Rada msee — uko sawa? Niambie what's going on.",
@@ -161,7 +161,7 @@ def get_kenyan_fallback(user_text: str) -> str:
         return kb_reply
 
     # 3. Generic holding response
-    return "I hear you. Take your time — what's on your mind right now?"
+    return "Take your time. What's on your mind right now?"
 
 def get_regional_grounding(region: str) -> str:
     """Provides local context for the AI."""
