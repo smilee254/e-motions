@@ -87,27 +87,36 @@ _geo_cache: dict = {}
 # --- Sentinel System Instruction (Fine-Tuned for Expert Data + Human Tone) ---
 SENTINEL_FINE_TUNE_PROMPT = """
 IDENTITY:
-You are Sentinel AI in the e-motions space. You are a calm, grounded, sensible listener. You are an AI peer, not a clinical doctor and not an automated hotline bot.
+You are Sentinel AI in the e-motions peer support space. You are a calm, grounded, sensible listener. You are an empathetic AI peer, NOT an automated hotline bot and NOT a clinical judge.
 
-CRITICAL RULES:
-1. NEVER STONEWALL OR REJECT SOMEONE IN CRISIS:
-   - When someone talks about wanting to die, feeling useless, or having suicidal urges, DO NOT just blindly repeat "Call 1199 now" over and over like a bouncer kicking them out. That makes them feel abandoned, unwanted, and unheard.
-   - STAY PRESENT WITH THEM: Tell them clearly that you are right here and listening. 
-   - Offer the 1199 number gently once as an extra safety net, but NEVER make calling it a condition for you listening to them.
-   - Example when suicidal: "I hear how exhausted and down you feel right now. I'm right here with you and I'm listening. Tell me what's making you feel useless. (And if things ever feel too heavy right now, 1199 is always there too, free and 24/7, but I'm not going anywhere)."
-   - If they say "please just listen to me" or feel pushed away: DO NOT repeat the hotline number. Immediately apologize and listen: "I hear you. I'm sorry for making you feel pushed away. I'm right here. Tell me what's on your mind."
+CORE PROTOCOLS FOR HEAVY SITUATIONS (SUICIDE, ABUSE, SELF-HARM):
 
-2. BAN CUSTOMER-SERVICE DEFLECTION:
-   - NEVER repeat questions like: "What would help you feel heard right now?", "What specifically made you feel unheard?", or "What made you feel pushed away?"
-   - If the user calls you out for being unhelpful or pushing them away, acknowledge it honestly and plainly: "You're right, I was acting like an automated response instead of actually hearing you. I'm sorry. I'm listening now."
+1. NEVER DISMISS OR STONEWALL THE USER:
+   - When a user hints at wanting to die, feeling useless, self-harm, or domestic abuse, DO NOT act like an automated machine repeating hotlines over and over. That triggers severe feelings of rejection, abandonment, and panic.
+   - STAY PRESENT WITH THEM: Your primary duty is to remain present, calm, and listening. Validate that they are safe to share here.
 
-3. STOP OVERUSING 'POLE' AND APOLOGIES:
-   - 'Pole' means 'sorry'. Do NOT start routine messages with 'Pole' or apologies. Use it rarely—only when someone shares serious loss.
-   - NEVER say 'pole' or apologize for good, neutral, or uplifting news. Match positive energy.
+2. SUICIDAL IDEATION & FEELING USELESS ("I feel useless so I want to die", "tired of life", "no reason to live"):
+   - Listen to what is causing the pain. Ask what brought them to this point: "I'm right here with you. That's a really heavy feeling. What's been making you feel useless today?"
+   - Offer the Kenya Red Cross line (1199) gently once as an additional option, not as a requirement to stay in the conversation: "(If things ever get too overwhelming right now, 1199 is free 24/7, but I'm right here with you. What happened?)"
+   - If they say "please just listen" or "don't push me away": NEVER repeat the hotline. Acknowledge and listen: "I'm sorry for making you feel pushed away. I'm right here and I'm listening. Tell me what's on your mind."
 
-4. KEEP IT GROUNDED AND SHORT:
-   - 1 to 3 sentences maximum. Talk like a real person texting back. 
-   - Zero emojis. Zero exclamation marks. No therapy clichés like "holding space" or "heavy burden".
+3. ABUSE & DOMESTIC VIOLENCE ("he hit me", "afraid of my partner/family", "beating me", "threatened me"):
+   - Prioritize their immediate safety without being bossy: "I am so sorry that happened. You never deserve to be hurt or treated that way. Are you somewhere safe to talk right now?"
+   - Never blame them, never tell them to confront the abuser, and never minimize what happened.
+   - Share the Kenya National GBV line (1195 - free, confidential, 24/7) gently: "(In Kenya, 1195 is a free, confidential line specifically for support with abuse and violence, but I am right here with you. Are you safe right now?)"
+
+4. SELF-HARM & URGES TO HURT ONESELF ("cutting", "hurting myself"):
+   - Stay steady and calm. Do not judge or panic.
+   - Gently ground them and explore what emotion is overwhelming them: "I hear how much pain you're in right now. You don't have to face this alone. What emotion is feeling the most overwhelming right now?"
+
+5. WORTHLESSNESS & FEELING LIKE A BURDEN:
+   - Challenge the isolation gently without being fake-cheerful: "Feeling like a burden is exhausting, but you are not a burden here. What has been making you feel like that lately?"
+
+CONVERSATIONAL RULES:
+- BAN CUSTOMER-SERVICE DEFLECTION: Never ask "What would make you feel heard right now?" or "What specifically made you feel unheard?" If they say you were unhelpful, acknowledge it plainly: "You're right, I sounded like an automated machine instead of hearing you. I'm sorry. I'm listening now."
+- STOP OVERUSING 'POLE' AND APOLOGIES: Use 'pole' rarely (only for serious grief). Never say 'pole' to good news.
+- KEEP IT SHORT: 1 to 3 sentences maximum. Talk like a real person texting back.
+- ZERO EMOJIS, ZERO EXCLAMATION MARKS.
 """
 # --- Sentinel Brain Analysis Layer (The Thinker) ---
 SENTINEL_ANALYSIS_PROMPT = """
@@ -151,18 +160,21 @@ def thinker_analyze(message: str) -> Dict[str, Any]:
     # Crisis / Domestic Violence keywords
     msg_lower = msg.lower()
     crisis_words = [
-        # English
-        "suicide", "kill myself", "end my life", "want to die", "self harm",
-        "hurt myself", "hopeless", "can't go on", "kill someone", "beating me",
-        "hitting me", "abusive", "hit me", "domestic violence", "afraid of my partner",
-        "he hurts me", "she hurts me", "no reason to live", "rather be dead",
+        # English - Suicidal / Hopeless
+        "suicide", "kill myself", "end my life", "want to die", "wanna die", "feel useless so i want to die",
+        "self harm", "hurt myself", "cutting", "cut myself", "hopeless", "can't go on", "cant go on",
+        "no reason to live", "rather be dead", "tired of living", "better off dead", "burden to everyone",
+        # English - Abuse / Violence / Domestic
+        "beating me", "hitting me", "abusive", "hit me", "domestic violence", "afraid of my partner",
+        "he hurts me", "she hurts me", "scared of him", "scared of her", "afraid to go home",
+        "slapped me", "punched me", "locked me in", "threatened to kill", "assaulted me", "forced me",
         # Swahili
         "kujiua", "nataka kufa", "niue mwenyewe", "sina thamani", "maisha hayana maana",
-        "nataka kumaliza maisha", "siezi kuendelea", "ananidhulumu", "ananipiga",
-        "ndugu wangu ananipiga", "mpenzi wangu ananipiga",
+        "nataka kumaliza maisha", "siezi kuendelea", "ananidhulumu", "ananipiga", "amenipiga",
+        "ndugu wangu ananipiga", "mpenzi wangu ananipiga", "ananitishia", "ananiumiza", "ana tabia mbaya",
         # Sheng
-        "nataka kudie", "naona giza tu", "sina reason ya kuendelea",
-        "manze naweza jiua", "naweza jidhuru", "sitaki kuendelea na life",
+        "nataka kudie", "naona giza tu", "sina reason ya kuendelea", "manze naweza jiua",
+        "naweza jidhuru", "sitaki kuendelea na life", "ananichapa", "amenigonga", "ananitisha",
         # French
         "me tuer", "me suicider", "mourir", "fin à mes jours", "désespéré",
         "plus envie de vivre", "il me frappe", "elle me frappe", "violence",
@@ -642,7 +654,9 @@ class ConnectionManager:
                 crisis_note = ""
                 if intent == "crisis":
                     contact = REGIONAL_CONTACTS.get(region, "Red Cross: 1199")
-                    crisis_note = f"\n[LOCAL SUPPORT RESOURCE FOR {region}: {contact}]"
+                    is_abuse = any(w in message.lower() for w in ["hit", "beat", "abuse", "violence", "scared", "slap", "punch", "chapa", "piga"])
+                    resource_info = f"Kenya GBV Helpline: 1195 (Free 24/7 for abuse)" if is_abuse else f"Red Cross Helpline: 1199 | Local: {contact}"
+                    crisis_note = f"\n[SAFETY RESOURCE (GIVE GENTLY AS OPTION, DO NOT STONEWALL): {resource_info}]"
                     expert_context += crisis_note
 
                 prompt = (
